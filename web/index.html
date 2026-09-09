@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code walkthrough</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23295fd4'/%3E%3Cpath d='M11 9 L5 16 L11 23 M21 9 L27 16 L21 23' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/vendor/fonts.css">
+<link rel="stylesheet" href="/assets/app.css">
+<script>window.CW = { token: "__CW_TOKEN__" };</script>
+</head>
+<body>
+
+<div id="boot" class="boot"><span class="spin" aria-hidden="true"></span> Reading the walkthrough</div>
+
+<header class="top" hidden>
+  <div class="left">
+    <div class="crumb">
+      <span id="repo"></span>
+      <span class="slash" id="slash" hidden>/</span>
+      <a class="num" id="number" target="_blank" rel="noreferrer"></a>
+      <span class="state" id="state" hidden></span>
+    </div>
+    <h1 id="title">&nbsp;</h1>
+  </div>
+  <div class="right">
+    <button class="pill" id="btnReload" hidden>the code changed, reload</button>
+    <button class="pill" id="btnSettings" title="Settings (s)">settings</button>
+    <div class="progress">
+      <div class="row"><span>progress</span><b id="progressLabel">0 / 0</b></div>
+      <div class="track"><div class="fill" id="progressFill"></div></div>
+    </div>
+  </div>
+</header>
+
+<div class="banner" id="problems" hidden></div>
+
+<div class="layout" hidden>
+  <aside class="rail" aria-label="Parts">
+    <button type="button" class="home" id="btnHome">Overview</button>
+    <div id="railItems"></div>
+  </aside>
+  <main class="stage" id="stage"></main>
+</div>
+
+<dialog id="settings" class="sheet">
+  <form method="dialog" id="settingsForm">
+    <div class="sheet-head">
+      <h2>Settings</h2>
+      <button class="x" value="cancel" type="submit" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label for="setIde">Editor to jump into</label>
+        <select id="setIde"></select>
+        <p class="hint" id="ideHint"></p>
+      </div>
+      <div class="field" id="wrapIdeCommand" hidden>
+        <label for="setIdeCommand">Custom command</label>
+        <input id="setIdeCommand" type="text" spellcheck="false" placeholder="mate --line {line} {file}">
+        <p class="hint">Placeholders: <code>{file}</code> <code>{line}</code> <code>{col}</code> <code>{fileUri}</code> <code>{slashed}</code></p>
+      </div>
+      <div class="field">
+        <label for="setIdePath">Editor path override</label>
+        <input id="setIdePath" type="text" spellcheck="false" placeholder="leave empty to use the one that was found">
+      </div>
+      <div class="field">
+        <label for="setTheme">Theme</label>
+        <select id="setTheme">
+          <option value="auto">Follow the system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Accent</label>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <p class="mono-path" id="settingsPath"></p>
+    </div>
+    <div class="sheet-foot">
+      <button class="nav" type="button" id="btnTestOpen">Test the editor</button>
+      <span class="grow"></span>
+      <button class="nav" value="cancel" type="submit">Cancel</button>
+      <button class="nav next" value="save" type="submit" id="btnSave">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="/assets/app.js"></script>
+</body>
+</html>

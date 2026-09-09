@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cw.roesink.dev/schema/v1.json",
+  "title": "Code walkthrough (cw/1)",
+  "description": "One pull request or one subsystem, split into parts, sections and steps. This file is the whole content of a walkthrough: a reader holds no topic of its own. The format is meant to outlive any one reader, so a consumer renders the blocks it understands and skips the rest without complaining.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "title", "parts"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL to this schema, so an editor validates the file while it is being written."
+    },
+    "version": {
+      "type": "string",
+      "const": "cw/1",
+      "description": "The format this file is written in. A consumer that does not know the version refuses the file rather than guessing at it."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The heading in the page header. For a pull request, its title.",
+      "examples": ["feat: reliable webhook processing"]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The paragraph on the overview, above the cards. What the change does and why, in a few sentences."
+    },
+    "root": {
+      "type": "string",
+      "description": "The checkout every file path is relative to. The command line --root wins over this, and without either a local reader uses the repository the walkthrough file sits in. Only used for opening files and for checking that the pasted code still matches the tree."
+    },
+    "language": {
+      "type": "string",
+      "description": "Fallback language for code blocks that do not name one.",
+      "examples": ["typescript", "csharp", "go"]
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The chapters of the walkthrough. Three to six is the working range: the overview is a set of cards, not a list to scroll.",
+      "items": { "$ref": "#/$defs/part" }
+    },
+    "ext": { "$ref": "#/$defs/ext" }
+  },
+
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the walkthrough comes from, in a form a machine can act on. It is what turns a file path plus a line number into a link, so a consumer that wants to point at the original needs nothing else.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["pull-request", "commit", "branch", "subsystem", "release", "other"],
+          "description": "What is being explained. pull-request is the common case and the only one that carries a diff."
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["github", "azure-devops", "gitlab", "bitbucket", "other"],
+          "description": "Who hosts it. A consumer that does not know the provider falls back to url and stops there."
+        },
+        "repo": {
+          "type": "string",
+          "description": "Owner and name, the way the provider writes it.",
+          "examples": ["innovadis-dev/Fincent"]
+        },
+        "number": {
+          "type": "string",
+          "description": "The pull request or ticket, written the way it should read in the header. The machine-readable form lives in url.",
+          "examples": ["PR #4150", "FIN-8107"]
+        },
+        "url": {
+          "type": "string",
+          "description": "The pull request, commit or page this walkthrough is about.",
+          "examples": ["https://github.com/innovadis-dev/Fincent/pull/4150"]
+        },
+        "state": {
+          "type": "string",
+          "description": "Small chip next to the number.",
+          "examples": ["open", "merged", "draft"]
+        },
+        "commit": {
+          "$ref": "#/$defs/sha1",
+          "description": "The commit every snippet was taken from. This is what makes a permalink permanent, so leaving it out costs the reader the ability to see the code in context."
+        },
+        "base": {
+          "type": "string",
+          "description": "The branch the change merges into.",
+          "examples": ["main", "develop"]
+        },
+        "head": {
+          "type": "string",
+          "description": "The branch the change is on.",
+          "examples": ["feature/FIN-8107-webhooks"]
+        },
+        "changedFiles": {
+          "type": "array",
+          "description": "The paths this change touches. A consumer uses it to tell a snippet of changed code from a snippet of untouched context, and to link the first into the diff.",
+          "items": { "$ref": "#/$defs/path" }
+        }
+      }
+    },
+
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "sections"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The card heading. A claim, not a category."
+        },
+        "desc": {
+          "type": "string",
+          "description": "One line on the card, under the title."
+        },
+        "long": {
+          "type": "string",
+          "description": "The paragraph on the part page itself, where there is room for the why."
+        },
+        "files": {
+          "type": "array",
+          "description": "File name chips on the card. Basenames read better here than full paths.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The rows on the part page. Each one is a run of steps about a single idea.",
+          "items": { "$ref": "#/$defs/section" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "steps"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "desc": { "type": "string", "description": "One line on the row, under the title." },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Two to five steps. A section with one step is a step; a section with nine is two sections.",
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "description": "One screen, written for a technical reader. Prose always, and then whichever of diagram, code, diff and anim earn their place. A step with prose alone is allowed and should be rare.",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The explanation, for someone who reads code. Two or three sentences on what happens and why it is done this way."
+        },
+        "speech": {
+          "type": "string",
+          "description": "The same step said out loud, for a consumer that reads the walkthrough rather than showing it. Only worth writing when body leans on what is on screen: 'the highlighted line' means nothing in an ear. Left out, a reader falls back to body."
+        },
+        "callout": {
+          "type": "string",
+          "description": "The warn block under the step. For the thing that will bite the next person, not for emphasis."
+        },
+        "diagram": { "$ref": "#/$defs/diagram" },
+        "code": { "$ref": "#/$defs/code" },
+        "diff": { "$ref": "#/$defs/diff" },
+        "anim": { "$ref": "#/$defs/anim" },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+
+    "diagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["def"],
+      "description": "A mermaid diagram. Blocks named in refs become clickable and show the code behind them.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "The label above the diagram.",
+          "examples": ["sequence diagram", "flow", "state machine"]
+        },
+        "def": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mermaid source. Newlines as \\n, the way mermaid would read it from a file."
+        },
+        "caption": {
+          "type": "string",
+          "description": "The line under the diagram. One sentence saying what to take away from it."
+        },
+        "refs": {
+          "type": "object",
+          "description": "Keyed by the node id or the exact node label in the mermaid source. Clicking that block opens the code below the diagram.",
+          "additionalProperties": { "$ref": "#/$defs/ref" }
+        }
+      }
+    },
+
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "code"],
+      "properties": {
+        "label": { "type": "string", "description": "What the panel calls this block. Defaults to the key." },
+        "file": { "$ref": "#/$defs/path" },
+        "from": { "$ref": "#/$defs/line" },
+        "to": { "$ref": "#/$defs/line" },
+        "sha": { "$ref": "#/$defs/sha256" },
+        "note": { "type": "string", "description": "Why this block is worth opening, in one sentence." },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The lines to show. Short: this is a peek from a diagram, not the snippet panel."
+        }
+      }
+    },
+
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "text"],
+      "description": "A snippet, shown with its own gutter. Line numbers in hi, add and notes are the numbers the gutter shows: 1 upwards, or from upwards when from is set.",
+      "properties": {
+        "file": { "$ref": "#/$defs/path" },
+        "from": { "$ref": "#/$defs/line" },
+        "to": {
+          "$ref": "#/$defs/line",
+          "description": "The last line of the snippet in the file. Redundant with from plus the line count, and worth stating anyway: it is what a link to a line range needs, and a consumer resolving the code live can check it before it reads."
+        },
+        "sha": { "$ref": "#/$defs/sha256" },
+        "lang": { "type": "string", "description": "Overrides the walkthrough-level language for this snippet." },
+        "note": {
+          "type": "string",
+          "description": "The chip next to the file name.",
+          "examples": ["new file", "+24 lines", "unchanged by this PR"]
+        },
+        "text": { "type": "string", "minLength": 1, "description": "The code itself. A copy, kept so the walkthrough reads without a checkout; sha and to are what let a consumer with a checkout prefer the real thing." },
+        "hi": {
+          "type": "array",
+          "description": "Lines to light up. The ones the step is actually about.",
+          "items": { "$ref": "#/$defs/line" }
+        },
+        "add": {
+          "type": "array",
+          "description": "Lines this change adds, marked with a + and a green wash.",
+          "items": { "$ref": "#/$defs/line" }
+        },
+        "notes": {
+          "type": "array",
+          "description": "A marker on a line that opens a sentence. For what the code does not say on its own.",
+          "items": { "$ref": "#/$defs/lineNote" }
+        }
+      }
+    },
+
+    "lineNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "text"],
+      "properties": {
+        "line": { "$ref": "#/$defs/line" },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "lines"],
+      "description": "A before and after. Not verifiable against a tree: half of it is by definition no longer there.",
+      "properties": {
+        "file": { "$ref": "#/$defs/path" },
+        "from": { "$ref": "#/$defs/line" },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/diffLine" }
+        }
+      }
+    },
+
+    "diffLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "t"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ctx", "add", "del"],
+          "description": "ctx keeps the line on both sides, add is only on the right, del only on the left."
+        },
+        "t": { "type": "string", "description": "The line, without the leading + or -." }
+      }
+    },
+
+    "anim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames"],
+      "description": "A handful of states played in a loop. For something that happens over time and has no code to point at: a rollout, a retry ladder, a migration window. A consumer that cannot animate shows the frames in order, or skips the block.",
+      "properties": {
+        "frames": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/frame" }
+        }
+      }
+    },
+
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "nodes"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "description": "Where on the clock this frame is.", "examples": ["t0 + 24h", "attempt 3"] },
+        "note": { "type": "string", "description": "What changed since the frame before." },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The same nodes in the same order in every frame. Only their state changes.",
+          "items": { "$ref": "#/$defs/frameNode" }
+        }
+      }
+    },
+
+    "frameNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "sub": { "type": "string", "description": "The second line, for a time or a status." },
+        "state": {
+          "type": "string",
+          "enum": ["idle", "active", "done", "gone", "alert"],
+          "description": "idle is waiting, active is happening now, done has happened, gone has been removed, alert is the failure this frame is about. Defaults to idle."
+        }
+      }
+    },
+
+    "ext": {
+      "type": "object",
+      "description": "The one open place in an otherwise closed schema. For data a particular consumer needs and the format has no opinion about. Anything here is ignored by every consumer that did not put it there, so nothing a reader needs to work belongs in it."
+    },
+
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "A name for this part, section or step that survives editing. Progress, bookmarks and deep links hang off it, so inserting a step must not renumber the ones around it. Left out, a publisher derives one from the title and writes it back."
+    },
+
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\\\]+$",
+      "description": "Repository-relative path with forward slashes. It is what a link or an open button hands on, so it has to be real."
+    },
+
+    "line": {
+      "type": "integer",
+      "minimum": 1
+    },
+
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$",
+      "description": "A git object name, full or abbreviated to at least seven characters."
+    },
+
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 over the snippet text with CRLF folded to LF and trailing newlines removed. A consumer with a checkout compares it against the file to see whether the paste is still the truth, without having to diff the text."
+    }
+  }
+}
