@@ -34,6 +34,10 @@ const usageText = `cw: serve a code walkthrough as a page you can step through.
   cw settings [--path]                  print the settings file
   cw cache clear                        drop the cached mermaid and typefaces
 
+Serving the site rather than one file:
+  cw host [--addr :8080] [--data DIR] [--base-url URL]
+  cw keys add <name> | list | rm <name>  [--data DIR]
+
 Flags for serve and check:
   --root DIR     the checkout the file paths are relative to
   --port N       serve on this port (serve only, default: a free one)
@@ -54,6 +58,10 @@ func main() {
 		cmdCheck(os.Args[2:])
 	case "migrate":
 		cmdMigrate(os.Args[2:])
+	case "host":
+		cmdHost(os.Args[2:])
+	case "keys":
+		cmdKeys(os.Args[2:])
 	case "schema":
 		cmdSchema(os.Args[2:])
 	case "ides":
@@ -414,6 +422,13 @@ type payload struct {
 	Moved    int      `json:"moved"`
 	Stale    int      `json:"stale"`
 	Stamp    string   `json:"stamp"`
+
+	// Set by the hosted server only. The page reads Hosted to decide whether a
+	// line number opens an editor or a link, and everything below it is the
+	// answer to what it can say without a working tree in front of it.
+	Hosted bool         `json:"hosted,omitempty"`
+	Meta   *Meta        `json:"meta,omitempty"`
+	GitHub *GitHubLinks `json:"github,omitempty"`
 }
 
 func cmdServe(args []string) {

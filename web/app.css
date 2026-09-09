@@ -610,3 +610,24 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
   .rail, .top .right, .dots, .stepfoot, .toast, .sheet { display: none !important; }
   .stage { max-width: none; padding: 0; }
 }
+
+/* An open button that is a link rather than a button: hosted there is no
+   process to start, so it is an anchor and has to shed the anchor styling. */
+a.open-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* What the publisher's working tree said about the snippets, next to the
+   number in the crumb. Quiet on purpose: it is provenance, not a warning. */
+.verified {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.verified.stale { color: var(--warn-label); border-color: var(--warn-label); }

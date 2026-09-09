@@ -5,6 +5,15 @@
 const $ = (id) => document.getElementById(id);
 const TOKEN = (window.CW && window.CW.token) || "";
 
+/* The page runs in two places. Locally it talks to a server that has the
+   reader's working tree and their editor, so a line number opens a file. Hosted
+   it has neither, so a line number becomes a link to the code on GitHub and the
+   settings live in this browser. Everything below routes through one of three
+   seams: SOURCE, settingsStore and opener. */
+const HOSTED = !!(window.CW && window.CW.hosted);
+const SOURCE = (window.CW && window.CW.source) || "/api/walkthrough";
+const SLUG = (window.CW && window.CW.slug) || "";
+
 const state = {
   data: null,
   view: "overview",
@@ -77,7 +86,12 @@ function stepsIn(p) {
   return p.sections.reduce((a, s) => a + s.steps.length, 0);
 }
 
-const key = (p, s, i) => p + "." + s + "." + i;
+// Progress and deep links hang off the ids in the document, not off where a
+// step happens to sit today. Inserting a step used to move everybody's saved
+// place along by one.
+const idOf = (thing, fallback) => (thing && thing.id) || String(fallback);
+const key = (p, s, i) =>
+  idOf(partAt(p), p) + "/" + idOf(sectionAt(p, s), s) + "/" + idOf(stepsOf(p, s)[i], i);
 const isDone = (p, s, i) => state.done.indexOf(key(p, s, i)) !== -1;
 const sectionComplete = (p, s) => stepsOf(p, s).every((_, i) => isDone(p, s, i));
 const partComplete = (p) => partAt(p).sections.every((_, s) => sectionComplete(p, s));
@@ -85,7 +99,8 @@ const partComplete = (p) => partAt(p).sections.every((_, s) => sectionComplete(p
 /* ------------------------------------------------------------------ storage */
 
 function storeKey() {
-  return "cw:progress:" + ((state.data && state.data.file) || "unknown");
+  const d = state.data || {};
+  return "cw:progress:" + (SLUG || d.file || "unknown");
 }
 
 function loadProgress() {
@@ -94,7 +109,23 @@ function loadProgress() {
     if (!raw) return;
     const saved = JSON.parse(raw);
     state.done = Array.isArray(saved.done) ? saved.done : [];
+    liftProgress();
   } catch { /* a fresh browser is a fresh start, which is fine */ }
+}
+
+// Progress saved before ids existed is a list of "0.1.2". Lift it once, so a
+// reader who was halfway through yesterday is still halfway through today.
+function liftProgress() {
+  let changed = false;
+  state.done = state.done.map((k) => {
+    const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(k);
+    if (!m) return k;
+    const [p, s, i] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (!stepsOf(p, s)[i]) return k;
+    changed = true;
+    return key(p, s, i);
+  });
+  if (changed) saveProgress();
 }
 
 function saveProgress() {
@@ -105,27 +136,44 @@ function saveProgress() {
 
 /* ------------------------------------------------------------------ routing */
 
+// A link to a step is #part-id/section-id/step-id. The old numeric form is
+// still read, because links to it are already out there.
 function readHash() {
-  const h = (location.hash || "").replace(/^#/, "");
+  const h = decodeURIComponent((location.hash || "").replace(/^#/, ""));
   if (!h) { state.view = "overview"; state.part = null; state.section = null; return; }
+  const found = h.includes("/") ? locateByID(h.split("/")) : locateByNumber(h);
+  if (!found) return;
+  Object.assign(state, found);
+}
+
+function locateByID(bits) {
+  const p = parts().findIndex((x) => x.id === bits[0]);
+  if (p < 0) return null;
+  if (bits.length < 2) return { view: "part", part: p, section: null };
+  const s = partAt(p).sections.findIndex((x) => x.id === bits[1]);
+  if (s < 0) return null;
+  const steps = stepsOf(p, s);
+  const i = bits.length > 2 ? steps.findIndex((x) => x.id === bits[2]) : 0;
+  if (i < 0) return null;
+  return { view: "step", part: p, section: s, step: i };
+}
+
+function locateByNumber(h) {
   const m = h.match(/^(\d+)(?:-(\d+))?(?:-(\d+))?$/);
-  if (!m) return;
+  if (!m) return null;
   const p = Number(m[1]) - 1;
-  if (!partAt(p)) return;
-  if (m[2] === undefined) { state.view = "part"; state.part = p; state.section = null; return; }
+  if (!partAt(p)) return null;
+  if (m[2] === undefined) return { view: "part", part: p, section: null };
   const s = Number(m[2]) - 1;
-  if (!sectionAt(p, s)) return;
+  if (!sectionAt(p, s)) return null;
   const i = m[3] === undefined ? 0 : Number(m[3]) - 1;
-  state.view = "step";
-  state.part = p;
-  state.section = s;
-  state.step = Math.max(0, Math.min(i, stepsOf(p, s).length - 1));
+  return { view: "step", part: p, section: s, step: Math.max(0, Math.min(i, stepsOf(p, s).length - 1)) };
 }
 
 function writeHash() {
   let h = "";
-  if (state.view === "part") h = "#" + (state.part + 1);
-  if (state.view === "step") h = "#" + (state.part + 1) + "-" + (state.section + 1) + "-" + (state.step + 1);
+  if (state.view === "part") h = "#" + idOf(partAt(state.part), state.part + 1);
+  if (state.view === "step") h = "#" + key(state.part, state.section, state.step);
   if (location.hash !== h) history.replaceState(null, "", h || location.pathname + location.search);
 }
 
@@ -197,6 +245,30 @@ function applyTheme() {
   if (s.accent) root.style.setProperty("--accent", s.accent);
 }
 
+/* Where a setting is kept. Locally it is a file the server owns, so the next
+   run comes up the way you left it on this machine. Hosted there is no machine
+   to speak of, and the editor settings are meaningless, so the theme and the
+   accent live in this browser and nothing leaves it. */
+const settingsStore = {
+  local: "cw:settings",
+
+  stored() {
+    if (!HOSTED) return null;
+    try { return JSON.parse(localStorage.getItem(this.local) || "null"); }
+    catch { return null; }
+  },
+
+  async save(s) {
+    if (!HOSTED) {
+      const r = await api("/api/settings", { method: "PUT", body: JSON.stringify(s) });
+      return { settings: r.settings, path: r.path };
+    }
+    try { localStorage.setItem(this.local, JSON.stringify({ theme: s.theme, accent: s.accent })); }
+    catch { /* a private window refuses, and the page has already switched */ }
+    return { settings: s, path: "this browser" };
+  },
+};
+
 // The theme lives in settings. This is the shortcut for it, and it saves the
 // same way the sheet does, so the next start comes up in the theme you left.
 async function toggleTheme() {
@@ -204,7 +276,7 @@ async function toggleTheme() {
   applyTheme();
   drawn = { def: null, theme: null };
   render();
-  try { await api("/api/settings", { method: "PUT", body: JSON.stringify(state.data.settings) }); }
+  try { await settingsStore.save(state.data.settings); }
   catch { /* the page still switched */ }
 }
 
@@ -438,10 +510,40 @@ function renderChrome() {
 
   $("state").textContent = src.state || "";
   $("state").hidden = !src.state;
+  renderVerified();
 
   const total = totalSteps();
   $("progressLabel").textContent = state.done.length + " / " + total;
   $("progressFill").style.width = total ? Math.round((state.done.length / total) * 100) + "%" : "0";
+}
+
+/* Hosted, the page has no working tree to check the snippets against, so the
+   only honest thing it can say is what the publisher's tree said at the time.
+   That is worth stating rather than leaving out: a reader deserves to know
+   which commit the code in front of them was true for. */
+function renderVerified() {
+  const chip = $("verified");
+  const v = HOSTED && state.data.meta && state.data.meta.verified;
+  if (!v || (!v.commit && !v.checked)) { chip.hidden = true; return; }
+
+  const when = state.data.meta.updatedAt
+    ? new Date(state.data.meta.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    : "";
+  const at = v.commit ? v.commit.slice(0, 7) : "";
+  const bits = [];
+  if (v.checked && !v.stale && !v.moved) bits.push("code checked");
+  else if (v.stale) bits.push(plural(v.stale, "snippet") + " already stale");
+  else if (v.moved) bits.push(plural(v.moved, "snippet") + " had moved");
+  else bits.push("unchecked");
+  if (at) bits.push(at);
+  if (when) bits.push(when);
+
+  chip.textContent = bits.join(" · ");
+  chip.classList.toggle("stale", !!v.stale);
+  chip.title = v.checked
+    ? plural(v.checked, "snippet") + " were compared against the publisher's working tree when this was published"
+    : "nothing was compared against a working tree when this was published";
+  chip.hidden = false;
 }
 
 function problems() {
@@ -451,6 +553,8 @@ function problems() {
   const trouble = [];
   if (d.moved) trouble.push(d.moved + " snippet(s) still exist but have moved to another line");
   if (d.stale) trouble.push(d.stale + " snippet(s) are no longer in the working tree");
+  const v = d.meta && d.meta.verified;
+  if (v && v.stale) trouble.push(v.stale + " snippet(s) were already out of date when this was published");
   if (!errs.length && !warns.length && !trouble.length) { box.hidden = true; return; }
   const list = [...errs, ...trouble, ...warns].slice(0, 20);
   box.innerHTML = "";
@@ -695,7 +799,7 @@ function refPanel(ref) {
   head.appendChild(el("span", "rlabel", ref.label || ""));
   head.appendChild(el("span", "where", ref.file + ":" + (ref.from || 1)));
   head.appendChild(el("span", "grow"));
-  head.appendChild(openButton(ref.file, ref.from || 1, "open-accent"));
+  head.appendChild(openButton(ref.file, ref.from || 1, "open-accent", ref.to));
   const close = el("button", "close-btn", "close");
   close.type = "button";
   close.addEventListener("click", () => go({ ref: null }));
@@ -722,12 +826,16 @@ function refPanel(ref) {
   return box;
 }
 
+// Locally this is what the working tree says right now. Hosted it is what the
+// publisher's tree said when they published, which is a weaker claim and is
+// worded as one.
 function checkTag(check) {
   if (!check) return null;
   if (check.state === "ok" || check.state === "unchecked") return null;
-  const label = check.state === "moved" ? "moved in the tree" :
-    check.state === "gone" ? "no longer in the tree" :
-    check.state === "missing-file" ? "file is gone" : check.state;
+  const when = HOSTED ? " when this was published" : " in the tree";
+  const label = check.state === "moved" ? "had moved" + when :
+    check.state === "gone" ? "was not in the code" + when :
+    check.state === "missing-file" ? "file was gone" + when : check.state;
   const tag = el("span", "tag " + (check.state === "moved" ? "moved" : "stale"), label);
   tag.title = check.note || "";
   return tag;
@@ -747,7 +855,7 @@ function panelCode(code) {
   const tag = checkTag(code.check);
   if (tag) head.appendChild(tag);
   head.appendChild(el("span", "grow"));
-  head.appendChild(openButton(code.file, code.from || 1, "open-dark"));
+  head.appendChild(openButton(code.file, code.from || 1, "open-dark", code.to));
   box.appendChild(head);
 
   const first = code.from || 1;
@@ -905,12 +1013,47 @@ function armAnim() {
 
 /* ------------------------------------------------------------------ opening */
 
-function openButton(file, line, cls) {
-  const b = el("button", cls, "open in IDE ↗");
-  b.type = "button";
-  b.title = "open " + file + " at line " + line + " in " + whereOpens();
-  b.addEventListener("click", () => openAt(file, line));
-  return b;
+/* One seam for "take me to this line". Locally that is the reader's editor,
+   through the server, because only the server can start a process. Hosted it is
+   a link to GitHub: into the pull request diff when the file is part of the
+   change, and otherwise to the file at the commit the walkthrough was written
+   against, which stays right after the branch moves on. */
+
+function githubHref(file, line, to) {
+  const g = state.data.github;
+  if (!g) return null;
+  if (g.prFiles && g.anchors && g.anchors[file]) {
+    return g.prFiles + "#" + g.anchors[file] + "R" + (line || 1);
+  }
+  if (g.blobBase) {
+    const at = "#L" + (line || 1) + (to && to > line ? "-L" + to : "");
+    return g.blobBase + file + at;
+  }
+  return g.prFiles || null;
+}
+
+function openButton(file, line, cls, to) {
+  if (!HOSTED) {
+    const b = el("button", cls, "open in IDE ↗");
+    b.type = "button";
+    b.title = "open " + file + " at line " + line + " in " + whereOpens();
+    b.addEventListener("click", () => openAt(file, line));
+    return b;
+  }
+  const href = githubHref(file, line, to);
+  if (!href) {
+    const b = el("button", cls, "no link ↗");
+    b.type = "button";
+    b.title = "this walkthrough names no repository, so there is nothing to link to";
+    b.addEventListener("click", () => toast("This walkthrough names no repository to link to", true));
+    return b;
+  }
+  const a = el("a", cls + " open-link", "on GitHub ↗");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noreferrer";
+  a.title = file + " at line " + line;
+  return a;
 }
 
 function whereOpens() {
@@ -919,6 +1062,12 @@ function whereOpens() {
 }
 
 async function openAt(file, line) {
+  if (HOSTED) {
+    const href = githubHref(file, line);
+    if (href) window.open(href, "_blank", "noreferrer");
+    else toast("This walkthrough names no repository to link to", true);
+    return;
+  }
   try {
     const r = await api("/api/open", { method: "POST", body: JSON.stringify({ file, line, col: 1 }) });
     if (r.ok) toast((r.message ? r.message + ". " : "") + file + ":" + line, !!r.message);
@@ -932,6 +1081,11 @@ async function openAt(file, line) {
 
 function openSettings() {
   const s = state.data.settings;
+  // Hosted there is no machine to open a file on, so the editor half of the
+  // sheet is not hidden as a disabled thing: it is simply not there.
+  $("wrapIde").hidden = HOSTED;
+  $("wrapIdePath").hidden = HOSTED;
+  $("btnTestOpen").hidden = HOSTED;
   const sel = $("setIde");
   sel.textContent = "";
   sel.appendChild(new Option("Detect automatically", "auto", false, s.ide === "auto"));
@@ -943,7 +1097,9 @@ function openSettings() {
   $("setIdeCommand").value = s.ideCommand || "";
   $("setIdePath").value = s.idePath || "";
   $("setTheme").value = s.theme || "auto";
-  $("settingsPath").textContent = state.data.settingsPath || "";
+  $("settingsPath").textContent = HOSTED
+    ? "Kept in this browser. Nothing here is sent anywhere."
+    : (state.data.settingsPath || "");
 
   const sw = $("swatches");
   sw.textContent = "";
@@ -964,6 +1120,7 @@ function openSettings() {
 }
 
 function syncIdeHint() {
+  if (HOSTED) return;
   const id = $("setIde").value;
   $("wrapIdeCommand").hidden = id !== "custom";
   const ide = state.data.ides.find((x) => x.id === id);
@@ -976,19 +1133,19 @@ function syncIdeHint() {
 }
 
 async function saveSettings() {
-  const s = Object.assign({}, state.data.settings, {
-    ide: $("setIde").value,
-    ideCommand: $("setIdeCommand").value.trim(),
-    idePath: $("setIdePath").value.trim(),
-    theme: $("setTheme").value,
-  });
+  const s = Object.assign({}, state.data.settings, { theme: $("setTheme").value });
+  if (!HOSTED) {
+    s.ide = $("setIde").value;
+    s.ideCommand = $("setIdeCommand").value.trim();
+    s.idePath = $("setIdePath").value.trim();
+  }
   try {
-    const r = await api("/api/settings", { method: "PUT", body: JSON.stringify(s) });
+    const r = await settingsStore.save(s);
     state.data.settings = r.settings;
     state.data.settingsPath = r.path;
     applyTheme();
     render();
-    toast("Saved to " + r.path);
+    toast(HOSTED ? "Saved in this browser" : "Saved to " + r.path);
   } catch (err) {
     toast("Could not save: " + err.message, true);
   }
@@ -997,7 +1154,7 @@ async function saveSettings() {
 /* ------------------------------------------------------------------ start */
 
 async function load() {
-  const data = await api("/api/walkthrough");
+  const data = await api(SOURCE);
   if (data.fatal) {
     $("boot").innerHTML = "";
     const box = el("div");
@@ -1009,7 +1166,10 @@ async function load() {
     return false;
   }
   state.data = data;
+  state.data.ides = data.ides || [];
   state.stamp = data.stamp;
+  // Hosted, the reader's own theme wins over the defaults the server sent.
+  Object.assign(state.data.settings, settingsStore.stored() || {});
   loadProgress();
   readHash();
   applyTheme();
@@ -1037,7 +1197,7 @@ function wire() {
       ide: $("setIde").value, ideCommand: $("setIdeCommand").value.trim(), idePath: $("setIdePath").value.trim(),
     });
     try {
-      await api("/api/settings", { method: "PUT", body: JSON.stringify(s) });
+      await settingsStore.save(s);
       state.data.settings = s;
       await openAt(first.file, first.from || 1);
     } catch (err) { toast(String(err.message || err), true); }
@@ -1070,20 +1230,26 @@ function wire() {
     if (!document.documentElement.dataset.theme) { drawn = { def: null, theme: null }; render(); }
   });
 
-  // The walkthrough is read from disk on every request, so an edit to the file
-  // or to the code it points at makes this page stale. Offer a reload.
+  /* Locally the walkthrough is read from disk on every request, so an edit to
+     the file or to the code it points at makes this page stale within seconds.
+     Hosted, it only changes when somebody republishes, so the same check runs
+     far less often and asks a smaller endpoint. */
+  const stateURL = HOSTED ? SOURCE + "/state" : "/api/state";
   setInterval(async () => {
     if (document.hidden || !state.data || !$("btnReload").hidden) return;
     try {
-      const r = await api("/api/state");
-      if (r.stamp && r.stamp !== state.stamp) $("btnReload").hidden = false;
+      const r = await api(stateURL);
+      if (r.stamp && r.stamp !== state.stamp) {
+        $("btnReload").textContent = HOSTED ? "this was republished, reload" : "the code changed, reload";
+        $("btnReload").hidden = false;
+      }
     } catch (err) {
-      if (String(err.message || "").includes("token")) {
+      if (!HOSTED && String(err.message || "").includes("token")) {
         $("btnReload").textContent = "the server restarted, reload";
         $("btnReload").hidden = false;
       }
     }
-  }, 2500);
+  }, HOSTED ? 30000 : 2500);
 }
 
 (async function main() {
