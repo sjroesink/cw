@@ -1,0 +1,82 @@
+name: Publish cw to Unraid
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cw-production
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    name: Test and publish cw.roesink.dev
+    if: github.repository == 'sjroesink/cw'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test application and image
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+          go build ./...
+          docker build --pull --tag cw-release-test .
+
+      - name: Trigger authenticated Unraid deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            token="$(curl --fail --silent --show-error \
+              --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=deploy.roes.ink" | jq -r .value)"
+            test -n "$token"
+            response_file="$(mktemp)"
+            http_code="$(curl --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer ${token}" \
+              --header 'Content-Type: application/json' \
+              --data '{"stack":"cw"}' \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              https://deploy.roes.ink/hooks/deploy || true)"
+            response="$(<"$response_file")"
+            rm -f "$response_file"
+
+            if [ "$http_code" = 200 ]; then
+              printf '%s\n' "$response"
+              if printf '%s\n' "$response" | grep -Fq "Commit: ${GITHUB_SHA}" && \
+                 printf '%s\n' "$response" | grep -Fq 'Deploy voltooid: cw'; then
+                exit 0
+              fi
+              echo 'Onverwacht antwoord van de deploywebhook.' >&2
+              exit 1
+            fi
+
+            echo "Deploywebhook nog bezet of time-out (HTTP ${http_code}, poging ${attempt}/120); opnieuw proberen..."
+            sleep 10
+          done
+          echo 'Deploywebhook bleef twintig minuten onbereikbaar.' >&2
+          exit 1
