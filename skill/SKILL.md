@@ -100,8 +100,15 @@ cw settings [--path]                       print the settings file
 cw cache warm | clear                      fetch the mermaid and typeface bundle, or drop it
 ```
 
-Publishing needs a key in `%USERPROFILE%\.claude\secrets\cw-api-key`, or `$env:CW_API_KEY`.
-Never print it, never pass it as an argument, never put it in a commit or a summary.
+Publishing needs no key. What comes back is a key for that one walkthrough, and it is
+the only thing that can change it afterwards. `cw publish` stores it in
+`%USERPROFILE%\.claude\secrets\cw-keys.json` and uses it the next time you publish the
+same file, so you never have to handle it. Never print it, never pass it as an argument,
+never put it in a commit or a summary, and never write it beside the walkthrough: that
+file lives in a repository.
+
+Someone else who needs to change your walkthrough needs that key from you. Whoever runs
+the site has an admin key that works on everything, which is the way back if it is lost.
 
 ## The two readers, and what each can do
 

@@ -18,12 +18,25 @@ go install github.com/sjroesink/cw@latest
 ```
 cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
 cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an error
+cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
+cw open <url or name> [--root DIR]         read a published one with the local buttons
 cw migrate <walkthrough.json>              lift an older file to cw/1, fill in ids and anchors
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine
 cw settings [--path]                       print the settings file
-cw cache clear                             drop the cached mermaid and typefaces
+cw cache warm | clear                      fetch the mermaid and typeface bundle, or drop it
 ```
+
+Running the site rather than one file:
+
+```
+cw host [--addr :8080] [--data DIR] [--base-url URL]
+cw keys add <name> | list | rm <name>      admin keys, which work on every walkthrough
+```
+
+Publishing is open: anyone who can reach the site can put a walkthrough on it. What comes back is a
+key for that one walkthrough, and it is the only thing that can change it afterwards. Only its hash
+is stored, so a lost key means asking whoever runs the site, whose admin key works on everything.
 
 `serve` opens a browser on 127.0.0.1. Without `--root` the root is `root` from the walkthrough, else
 the git root the file sits in. Without any root the page still reads: the open buttons say so and

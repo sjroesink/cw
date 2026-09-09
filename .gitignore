@@ -2,3 +2,4 @@ cw
 cw.exe
 /data/
 *.tmp
+*.published.json

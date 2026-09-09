@@ -25,8 +25,13 @@ real database it will be because there are enough of them to page through, and
 that is a good problem to have first.
 
 	<data>/walkthroughs/<slug>/doc.json    the walkthrough itself, cw/1
-	<data>/walkthroughs/<slug>/meta.json   who published it, when, and what was verified
-	<data>/keys.json                       API keys, as hashes
+	<data>/walkthroughs/<slug>/meta.json   when it was published and what was verified
+	<data>/walkthroughs/<slug>/key         the hash of the key that may change it
+	<data>/keys.json                       admin keys, as hashes
+
+The edit key lives in its own file rather than in meta.json, because meta.json
+is handed to anyone who opens the page. A secret that is not in the struct that
+gets serialised cannot be leaked by adding a field to a response later.
 
 Every write goes to a temp file and is then renamed, so a reader either sees the
 version before or the version after and never half of one.
@@ -240,21 +245,79 @@ func (s *Store) readKeys() ([]Key, error) {
 	return kf.Keys, nil
 }
 
-// AddKey mints a key, stores its hash and hands back the only copy of the key
-// itself. Calling it twice with the same name adds a second key, because
-// rotating one is exactly that: add, move over, remove.
-func (s *Store) AddKey(name string) (string, error) {
+// ---------------------------------------------------------------- edit keys
+
+// mintKey makes a key and hands back the only copy. Callers store the hash.
+func mintKey(prefix string) (string, error) {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
-	key := "cw_" + hex.EncodeToString(raw)
+	return prefix + hex.EncodeToString(raw), nil
+}
+
+func (s *Store) keyFileFor(slug string) string {
+	return filepath.Join(s.dirFor(slug), "key")
+}
+
+// SetEditKey mints the key that may change this walkthrough and returns it. It
+// is the only time the key exists anywhere but in the hands of whoever
+// published: only its hash is written down.
+func (s *Store) SetEditKey(slug string) (string, error) {
+	if !ValidSlug(slug) {
+		return "", ErrNoSuchWalkthrough
+	}
+	key, err := mintKey("cwp_")
+	if err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.MkdirAll(s.dirFor(slug), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(s.keyFileFor(slug), []byte(hashKey(key)), 0o600); err != nil {
+		return "", err
+	}
+	return key, nil
+}
+
+// MayEdit says whether the presented key is allowed to change this walkthrough:
+// its own key, or an admin key, which is what makes a lost key recoverable and
+// a mistake removable. Both comparisons run in constant time, and an unclaimed
+// walkthrough is admin-only rather than open to anyone.
+func (s *Store) MayEdit(slug, presented string) bool {
+	if presented == "" {
+		return false
+	}
+	s.mu.RLock()
+	want, err := os.ReadFile(s.keyFileFor(slug))
+	s.mu.RUnlock()
+	if err == nil && len(want) > 0 {
+		if subtle.ConstantTimeCompare(want, []byte(hashKey(presented))) == 1 {
+			return true
+		}
+	}
+	_, isAdmin := s.MatchKey(presented)
+	return isAdmin
+}
+
+// ---------------------------------------------------------------- admin keys
+
+// AddKey mints a key, stores its hash and hands back the only copy of the key
+// itself. Calling it twice with the same name adds a second key, because
+// rotating one is exactly that: add, move over, remove.
+func (s *Store) AddKey(name string) (string, error) {
+	key, err := mintKey("cw_")
+	if err != nil {
+		return "", err
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	keys, err := s.readKeys()
-	if err != nil {
-		return "", err
+	keys, err2 := s.readKeys()
+	if err2 != nil {
+		return "", err2
 	}
 	keys = append(keys, Key{Name: name, Hash: hashKey(key), CreatedAt: time.Now().UTC()})
 	if err := writeJSONFile(s.keysPath(), keyFile{Keys: keys}); err != nil {

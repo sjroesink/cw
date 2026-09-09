@@ -73,19 +73,22 @@ func TestTheNoteDecidesUpdateOrNew(t *testing.T) {
 	write(t, file, "{}")
 
 	f := publishFlags{file: file, site: "https://cw.example"}
-	if url, method := f.resolveTarget(); method != "POST" || url != "https://cw.example/api/v1/walkthroughs" {
+	if url, method, _ := f.resolveTarget(); method != "POST" || url != "https://cw.example/api/v1/walkthroughs" {
 		t.Errorf("a file that was never published went to %s %s", method, url)
 	}
 
 	rememberPublish(file, published{Site: "https://cw.example", Slug: "already-there", At: time.Now()})
-	url, method := f.resolveTarget()
+	url, method, slug := f.resolveTarget()
+	if slug != "already-there" {
+		t.Errorf("the name to update was %q", slug)
+	}
 	if method != "PUT" || url != "https://cw.example/api/v1/walkthroughs/already-there" {
 		t.Errorf("a file that was published before went to %s %s, want a PUT in place", method, url)
 	}
 
 	// --new is how you say you meant a second one.
 	f.isNew = true
-	if _, method := f.resolveTarget(); method != "POST" {
+	if _, method, _ := f.resolveTarget(); method != "POST" {
 		t.Errorf("--new used %s", method)
 	}
 
@@ -93,7 +96,7 @@ func TestTheNoteDecidesUpdateOrNew(t *testing.T) {
 	// must not update a name that only exists on the first one.
 	f.isNew = false
 	f.site = "https://other.example"
-	if _, method := f.resolveTarget(); method != "POST" {
+	if _, method, _ := f.resolveTarget(); method != "POST" {
 		t.Errorf("publishing to a different site used %s, want POST", method)
 	}
 }

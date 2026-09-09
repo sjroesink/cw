@@ -219,7 +219,7 @@
               "code": {
                 "file": "api.go",
                 "from": 155,
-                "text": "func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time) {\n\td.Version = FormatVersion\n\td.Schema = strings.TrimRight(h.base, \"/\") + \"/schema/v1.json\"\n\tEnsureIDs(d)\n\tEnsureAnchors(d)\n",
+                "text": "\t\th.fail(w, http.StatusBadRequest, \"%v\", err)\n\t\treturn\n\t}\n\tif len(res.Errors) > 0 {\n\t\twriteJSON(w, http.StatusBadRequest, apiResult{Errors: res.Errors, Warnings: res.Warnings,\n\t\t\tMessage: \"the walkthrough was not stored, and what was there is untouched\"})",
                 "hi": [
                   158,
                   159

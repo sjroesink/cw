@@ -23,7 +23,9 @@ that file and nothing else.
    repository, the pull request URL, the head commit and the changed files: that is what turns every
    snippet into a link back to the diff.
 3. **Validate it** by posting it to `/api/v1/validate`. Fix what comes back and post again.
-4. **Publish it** with `POST /api/v1/walkthroughs`, and give the person the URL that comes back.
+4. **Publish it** with `POST /api/v1/walkthroughs`. No key is needed to do that. Give the person
+   the URL that comes back, and the key that comes with it: it is shown once, and it is the only
+   thing that can change that walkthrough afterwards.
 
 ## What to tell them afterwards
 

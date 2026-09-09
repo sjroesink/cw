@@ -55,9 +55,9 @@ const goodDoc = `{
 }`
 
 func TestPublishAndRead(t *testing.T) {
-	h, key := testHost(t)
+	h, _ := testHost(t)
 
-	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", key, goodDoc)
+	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("publish returned %d: %s", rec.Code, rec.Body)
 	}
@@ -106,15 +106,72 @@ func TestPublishAndRead(t *testing.T) {
 	}
 }
 
+// Publishing is open, and what comes back is the key to that one walkthrough.
+func TestPublishingIsOpenAndHandsBackAKey(t *testing.T) {
+	h, _ := testHost(t)
+
+	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("publishing without a key returned %d: %s", rec.Code, rec.Body)
+	}
+	key, _ := out["key"].(string)
+	if !strings.HasPrefix(key, "cwp_") || len(key) < 20 {
+		t.Fatalf("the key that came back is %q", key)
+	}
+
+	// It is handed over once. Updating does not mint a second one.
+	_, again := do(t, h, "PUT", "/api/v1/walkthroughs/r-pr-7", key, goodDoc)
+	if _, handed := again["key"]; handed {
+		t.Error("updating handed out another key")
+	}
+
+	// And it is stored as a hash, nowhere near what a reader can see.
+	rec, payload := do(t, h, "GET", "/api/v1/walkthroughs/r-pr-7", "", "")
+	if strings.Contains(rec.Body.String(), key) {
+		t.Error("the key came back in the payload the page reads")
+	}
+	if meta, _ := payload["meta"].(map[string]any); meta != nil {
+		for field := range meta {
+			if strings.Contains(strings.ToLower(field), "key") {
+				t.Errorf("meta carries a %q field, which is served to every reader", field)
+			}
+		}
+	}
+}
+
+// The key belongs to one walkthrough, so it does not open the one next to it.
+func TestAKeyOnlyOpensItsOwnWalkthrough(t *testing.T) {
+	h, admin := testHost(t)
+	_, mine := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
+	_, theirs := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
+
+	mineKey, theirsSlug := mine["key"].(string), theirs["slug"].(string)
+	if rec, _ := do(t, h, "PUT", "/api/v1/walkthroughs/"+theirsSlug, mineKey, goodDoc); rec.Code != http.StatusUnauthorized {
+		t.Errorf("one walkthrough's key changed another one: %d", rec.Code)
+	}
+	if rec, _ := do(t, h, "DELETE", "/api/v1/walkthroughs/"+theirsSlug, mineKey, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("one walkthrough's key deleted another one: %d", rec.Code)
+	}
+
+	// An admin key works on everything, which is how a lost key is recovered
+	// and how something that should not be there is removed.
+	if rec, _ := do(t, h, "PUT", "/api/v1/walkthroughs/"+theirsSlug, admin, goodDoc); rec.Code != http.StatusOK {
+		t.Errorf("the admin key could not change a walkthrough it did not publish: %d", rec.Code)
+	}
+	if rec, _ := do(t, h, "DELETE", "/api/v1/walkthroughs/"+theirsSlug, admin, ""); rec.Code != http.StatusOK {
+		t.Errorf("the admin key could not delete: %d", rec.Code)
+	}
+}
+
 func TestPublishRefusesABrokenDocument(t *testing.T) {
-	h, key := testHost(t)
+	h, _ := testHost(t)
 	// hi points outside the snippet, which the schema cannot catch and
 	// inspect() does.
 	broken := strings.Replace(goodDoc,
 		`"code":{"file":"a.go","from":3,`,
 		`"code":{"file":"a.go","from":3,"hi":[99],`, 1)
 
-	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", key, broken)
+	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", "", broken)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("a broken document returned %d, want 400", rec.Code)
 	}
@@ -131,8 +188,9 @@ func TestPublishRefusesABrokenDocument(t *testing.T) {
 }
 
 func TestUpdateKeepsTheURLAndTheCreationDate(t *testing.T) {
-	h, key := testHost(t)
-	do(t, h, "POST", "/api/v1/walkthroughs", key, goodDoc)
+	h, _ := testHost(t)
+	_, made := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
+	key, _ := made["key"].(string)
 	_, first, _ := h.store.Get("r-pr-7")
 
 	updated := strings.Replace(goodDoc, "A change worth reading", "A better title", 1)
@@ -163,9 +221,9 @@ func TestUpdateKeepsTheURLAndTheCreationDate(t *testing.T) {
 // overwriting the other. Losing somebody else's page to a name collision is
 // worse than an ugly slug.
 func TestPublishingTwiceDoesNotOverwrite(t *testing.T) {
-	h, key := testHost(t)
-	_, first := do(t, h, "POST", "/api/v1/walkthroughs", key, goodDoc)
-	_, second := do(t, h, "POST", "/api/v1/walkthroughs", key, goodDoc)
+	h, _ := testHost(t)
+	_, first := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
+	_, second := do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
 	if first["slug"] == second["slug"] {
 		t.Fatalf("both publishes claimed %v", first["slug"])
 	}
@@ -175,7 +233,7 @@ func TestPublishingTwiceDoesNotOverwrite(t *testing.T) {
 
 	// Asking for a name that is taken is refused rather than counted up,
 	// because the caller said which one they meant.
-	rec, _ := do(t, h, "POST", "/api/v1/walkthroughs", key,
+	rec, _ := do(t, h, "POST", "/api/v1/walkthroughs", "",
 		`{"slug":"r-pr-7","walkthrough":`+goodDoc+`}`)
 	if rec.Code != http.StatusConflict {
 		t.Errorf("asking for a taken name returned %d, want 409", rec.Code)
@@ -183,8 +241,8 @@ func TestPublishingTwiceDoesNotOverwrite(t *testing.T) {
 }
 
 func TestEnvelopeChoosesTheName(t *testing.T) {
-	h, key := testHost(t)
-	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", key,
+	h, _ := testHost(t)
+	rec, out := do(t, h, "POST", "/api/v1/walkthroughs", "",
 		`{"slug":"my-own-name","walkthrough":`+goodDoc+`}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("publish with an envelope returned %d: %s", rec.Code, rec.Body)
@@ -193,28 +251,36 @@ func TestEnvelopeChoosesTheName(t *testing.T) {
 		t.Errorf("the name was %v, want my-own-name", out["slug"])
 	}
 
-	rec, _ = do(t, h, "POST", "/api/v1/walkthroughs", key,
+	rec, _ = do(t, h, "POST", "/api/v1/walkthroughs", "",
 		`{"slug":"Not A Slug","walkthrough":`+goodDoc+`}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("an impossible name returned %d, want 400", rec.Code)
 	}
 }
 
-func TestWritingNeedsAKeyAndReadingDoesNot(t *testing.T) {
-	h, key := testHost(t)
-	do(t, h, "POST", "/api/v1/walkthroughs", key, goodDoc)
+// Only changing what is already there needs a key. Reading and publishing do not.
+func TestOnlyChangingNeedsAKey(t *testing.T) {
+	h, _ := testHost(t)
+	do(t, h, "POST", "/api/v1/walkthroughs", "", goodDoc)
 
 	for _, c := range []struct{ method, path string }{
-		{"POST", "/api/v1/walkthroughs"},
 		{"PUT", "/api/v1/walkthroughs/r-pr-7"},
 		{"DELETE", "/api/v1/walkthroughs/r-pr-7"},
-		{"POST", "/api/v1/validate"},
 	} {
 		if rec, _ := do(t, h, c.method, c.path, "", goodDoc); rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s without a key returned %d, want 401", c.method, c.path, rec.Code)
 		}
-		if rec, _ := do(t, h, c.method, c.path, "cw_wrong", goodDoc); rec.Code != http.StatusUnauthorized {
+		if rec, _ := do(t, h, c.method, c.path, "cwp_wrong", goodDoc); rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s with a wrong key returned %d, want 401", c.method, c.path, rec.Code)
+		}
+	}
+
+	for _, c := range []struct{ method, path string }{
+		{"POST", "/api/v1/walkthroughs"},
+		{"POST", "/api/v1/validate"},
+	} {
+		if rec, _ := do(t, h, c.method, c.path, "", goodDoc); rec.Code != http.StatusOK {
+			t.Errorf("%s %s without a key returned %d, want 200", c.method, c.path, rec.Code)
 		}
 	}
 
@@ -230,8 +296,8 @@ func TestWritingNeedsAKeyAndReadingDoesNot(t *testing.T) {
 }
 
 func TestValidateStoresNothing(t *testing.T) {
-	h, key := testHost(t)
-	rec, out := do(t, h, "POST", "/api/v1/validate", key, goodDoc)
+	h, _ := testHost(t)
+	rec, out := do(t, h, "POST", "/api/v1/validate", "", goodDoc)
 	if rec.Code != http.StatusOK || out["ok"] != true {
 		t.Fatalf("validating a good document returned %d, %v", rec.Code, out)
 	}
@@ -271,6 +337,7 @@ func TestUnknownWalkthrough(t *testing.T) {
 		{"GET", "/api/v1/walkthroughs/nothing", "", http.StatusNotFound},
 		{"GET", "/api/v1/walkthroughs/nothing/state", "", http.StatusNotFound},
 		{"DELETE", "/api/v1/walkthroughs/nothing", key, http.StatusNotFound},
+		{"PUT", "/api/v1/walkthroughs/nothing", key, http.StatusNotFound},
 		{"GET", "/w/nothing", "", http.StatusNotFound},
 	} {
 		if rec, _ := do(t, h, c.method, c.path, c.key, ""); rec.Code != c.want {

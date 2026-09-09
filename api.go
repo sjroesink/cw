@@ -21,6 +21,12 @@ Errors refuse the document. Warnings come back with a successful publish,
 because the difference between a walkthrough that validates and one somebody
 wants to read is entirely in the warnings, and refusing on them would only teach
 people to write around them.
+
+Publishing is open. What comes back is a key for that one walkthrough, and it is
+the only thing that can change it afterwards. So nobody needs an account to put
+something up, and nobody can quietly rewrite what somebody else put up. An admin
+key from keys.json works on everything, which is how a lost key is recovered and
+how something that should not be there is removed.
 */
 
 // maxBody is generous for prose and snippets and mean for anything else. A
@@ -28,9 +34,13 @@ people to write around them.
 const maxBody = 8 << 20
 
 type apiResult struct {
-	OK       bool     `json:"ok"`
-	Slug     string   `json:"slug,omitempty"`
-	URL      string   `json:"url,omitempty"`
+	OK   bool   `json:"ok"`
+	Slug string `json:"slug,omitempty"`
+	URL  string `json:"url,omitempty"`
+	// Key is handed over once, when a walkthrough is created, and never again.
+	// Losing it means asking whoever runs the site, which is the trade for not
+	// having to ask anyone before publishing.
+	Key      string   `json:"key,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 	Message  string   `json:"message,omitempty"`
@@ -48,25 +58,31 @@ func (h *hostServer) fail(w http.ResponseWriter, code int, format string, a ...a
 	writeJSON(w, code, apiResult{Message: fmt.Sprintf(format, a...)})
 }
 
-// key pulls the bearer token out of the request and answers with the name it
-// was stored under. Everything that writes goes through here.
-func (h *hostServer) key(r *http.Request) (string, bool) {
+// bearer is the key the caller presented, or empty.
+func bearer(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") {
-		return "", false
+		return ""
 	}
-	return h.store.MatchKey(strings.TrimSpace(strings.TrimPrefix(auth, "Bearer ")))
+	return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 }
 
-func (h *hostServer) guarded(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+// owned wraps the two things that change a walkthrough that is already there.
+// Both need that walkthrough's own key, or an admin key.
+func (h *hostServer) owned(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		name, ok := h.key(r)
-		if !ok {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="cw"`)
-			h.fail(w, http.StatusUnauthorized, "this needs an API key: Authorization: Bearer cw_...")
+		slug := r.PathValue("slug")
+		if !ValidSlug(slug) || !h.store.Exists(slug) {
+			h.fail(w, http.StatusNotFound, "no walkthrough called %q", slug)
 			return
 		}
-		next(w, r, name)
+		if !h.store.MayEdit(slug, bearer(r)) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="cw"`)
+			h.fail(w, http.StatusUnauthorized,
+				"changing %q needs the key you were given when it was published: Authorization: Bearer cwp_...", slug)
+			return
+		}
+		next(w, r, slug)
 	}
 }
 
@@ -102,7 +118,9 @@ func (h *hostServer) readDoc(r *http.Request) (*Doc, string, *LoadResult, error)
 
 // ---------------------------------------------------------------- publishing
 
-func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request, publisher string) {
+// handleCreate needs no key. Anyone who can reach the site can put a walkthrough
+// on it, and what they get back is the key to their own.
+func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request) {
 	d, want, res, err := h.readDoc(r)
 	if err != nil {
 		h.fail(w, http.StatusBadRequest, "%v", err)
@@ -124,15 +142,14 @@ func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request, publis
 		h.fail(w, http.StatusConflict, "there is already a walkthrough called %q. Use PUT to replace it, or ask for another name", slug)
 		return
 	}
-	h.save(w, slug, d, res, publisher, time.Time{})
+	publisher := ""
+	if name, ok := h.store.MatchKey(bearer(r)); ok {
+		publisher = name
+	}
+	h.save(w, slug, d, res, publisher, time.Time{}, true)
 }
 
-func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, publisher string) {
-	slug := r.PathValue("slug")
-	if !ValidSlug(slug) {
-		h.fail(w, http.StatusNotFound, "no walkthrough called %q", slug)
-		return
-	}
+func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, slug string) {
 	d, _, res, err := h.readDoc(r)
 	if err != nil {
 		h.fail(w, http.StatusBadRequest, "%v", err)
@@ -143,16 +160,16 @@ func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, publi
 			Message: "the walkthrough was not stored, and what was there is untouched"})
 		return
 	}
-	created := time.Time{}
+	created, publisher := time.Time{}, ""
 	if _, old, err := h.store.Get(slug); err == nil {
-		created = old.CreatedAt
+		created, publisher = old.CreatedAt, old.Publisher
 	}
-	h.save(w, slug, d, res, publisher, created)
+	h.save(w, slug, d, res, publisher, created, false)
 }
 
 // save is the last stretch both publishing paths share: fill in what a
 // publisher should not have to type, work out what was verified, write it.
-func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time) {
+func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time, fresh bool) {
 	d.Version = FormatVersion
 	d.Schema = strings.TrimRight(h.base, "/") + "/schema/v1.json"
 	EnsureIDs(d)
@@ -174,8 +191,18 @@ func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadR
 		h.fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apiResult{OK: true, Slug: slug,
-		URL: strings.TrimRight(h.base, "/") + "/w/" + slug, Warnings: res.Warnings})
+	out := apiResult{OK: true, Slug: slug,
+		URL: strings.TrimRight(h.base, "/") + "/w/" + slug, Warnings: res.Warnings}
+	if fresh {
+		key, err := h.store.SetEditKey(slug)
+		if err != nil {
+			// The walkthrough is up; it just cannot be changed by whoever put
+			// it there. Say that rather than pretending the publish failed.
+			out.Message = "published, but the edit key could not be stored: " + err.Error()
+		}
+		out.Key = key
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // verdictOf reads the check states the publisher baked into the document. This
@@ -239,7 +266,9 @@ func deriveSlug(d *Doc) string {
 
 // ---------------------------------------------------------------- reading
 
-func (h *hostServer) handleValidate(w http.ResponseWriter, r *http.Request, _ string) {
+// handleValidate stores nothing, so it needs nothing. An agent iterating on a
+// document should not have to be allowed to publish before it can check its work.
+func (h *hostServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 	d, _, res, err := h.readDoc(r)
 	if err != nil {
 		h.fail(w, http.StatusBadRequest, "%v", err)
@@ -291,8 +320,7 @@ func (h *hostServer) handleState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"stamp": m.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 }
 
-func (h *hostServer) handleDelete(w http.ResponseWriter, r *http.Request, _ string) {
-	slug := r.PathValue("slug")
+func (h *hostServer) handleDelete(w http.ResponseWriter, r *http.Request, slug string) {
 	if err := h.store.Delete(slug); err != nil {
 		h.fail(w, http.StatusNotFound, "no walkthrough called %q", slug)
 		return

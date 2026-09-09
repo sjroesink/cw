@@ -132,13 +132,15 @@ func (h *hostServer) routes() http.Handler {
 	mux.HandleFunc("GET /skill.md", h.text(func() string { return SkillDoc(h.base) }))
 	mux.HandleFunc("GET /format", h.text(FormatDoc))
 
+	// Reading and publishing are open. Changing something that is already there
+	// needs the key that came back when it was published.
 	mux.HandleFunc("GET /api/v1/walkthroughs", h.handleList)
-	mux.HandleFunc("POST /api/v1/walkthroughs", h.guarded(h.handleCreate))
+	mux.HandleFunc("POST /api/v1/walkthroughs", h.handleCreate)
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}", h.handleGet)
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}/state", h.handleState)
-	mux.HandleFunc("PUT /api/v1/walkthroughs/{slug}", h.guarded(h.handleReplace))
-	mux.HandleFunc("DELETE /api/v1/walkthroughs/{slug}", h.guarded(h.handleDelete))
-	mux.HandleFunc("POST /api/v1/validate", h.guarded(h.handleValidate))
+	mux.HandleFunc("PUT /api/v1/walkthroughs/{slug}", h.owned(h.handleReplace))
+	mux.HandleFunc("DELETE /api/v1/walkthroughs/{slug}", h.owned(h.handleDelete))
+	mux.HandleFunc("POST /api/v1/validate", h.handleValidate)
 
 	return mux
 }
