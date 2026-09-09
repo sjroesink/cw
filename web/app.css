@@ -121,6 +121,8 @@ body {
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1, h2, h3 { margin: 0; }
@@ -201,11 +203,18 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
 
 /* ------------------------------------------------------------------ layout */
 
-.layout { display: grid; grid-template-columns: 296px minmax(0, 1fr); align-items: start; }
+/* The body is a column, so this takes whatever height the header leaves over.
+   That is what the rail measures itself against. */
+.layout { display: grid; grid-template-columns: 296px minmax(0, 1fr); align-items: start; flex: 1 1 auto; }
 
+/* The rail fills its row, not the viewport. A viewport-tall rail sitting under a
+   header makes the document taller than the screen by exactly the height of that
+   header, which is a scrollbar on a page that fits. The cap is the other half of
+   it: once the walkthrough is longer than the screen the rail stops growing with
+   it, and can stick and scroll on its own. */
 .rail {
   position: sticky; top: 0; align-self: start;
-  min-height: 100vh; max-height: 100vh; overflow-y: auto; overflow-x: hidden;
+  height: 100%; max-height: 100vh; overflow-y: auto; overflow-x: hidden;
   border-right: 1px solid var(--line); padding: 20px 16px 40px; background: var(--header);
 }
 .rail .home {
@@ -601,7 +610,7 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .rail { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--line); }
+  .rail { position: static; height: auto; max-height: none; border-right: none; border-bottom: 1px solid var(--line); }
   .stage { padding: 28px 20px 72px; }
   .top { padding: 16px 20px 14px; }
 }
