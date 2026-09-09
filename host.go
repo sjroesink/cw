@@ -128,7 +128,11 @@ func cmdHost(args []string) {
 	fmt.Printf("  trusting  %s\n", h.trustedFrom)
 	fmt.Printf("            GET %s/api/v1/whoami says which address a caller looks like from here\n", h.base)
 	if len(keys) == 0 {
-		fmt.Printf("\nNothing can be published yet. Add a key with:\n  cw keys add <name> --data %s\n", store.Dir)
+		// Publishing has needed no key since v0.2.0. An admin key is the way
+		// back into a walkthrough whose own key somebody lost, so it is worth
+		// having, but nothing is waiting on it.
+		fmt.Printf("\nAnyone can publish. What is missing is an admin key, the one that opens\n"+
+			"a walkthrough whose own key was lost. Add one with:\n  cw keys add <name> --data %s\n", store.Dir)
 	}
 	fmt.Printf("\nctrl-c to stop\n")
 

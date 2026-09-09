@@ -722,15 +722,93 @@ function viewOverview() {
     if (p.desc) card.appendChild(mdEl("div", "desc", p.desc));
     if (p.files && p.files.length) {
       const chips = el("div", "chips");
-      for (const f of p.files) chips.appendChild(el("span", "chip", f));
+      for (const f of p.files) {
+        const chip = el("span", "chip", baseName(f));
+        if (baseName(f) !== f) chip.title = f;
+        chips.appendChild(chip);
+      }
       card.appendChild(chips);
     }
     card.addEventListener("click", () => go({ view: "part", part: pi, section: null }));
     grid.appendChild(card);
   });
   v.appendChild(grid);
+  if (HOSTED) v.appendChild(localBlock());
   v.appendChild(pageFoot());
   return v;
+}
+
+/* The two things this page cannot do are the two things a checkout gives back:
+   a line number that opens an editor, and a snippet checked against the code as
+   it is now. Both come back by pulling the walkthrough down to the machine that
+   has the repository, so the command that does it is on the page rather than in
+   a document somebody has to find. */
+function localBlock() {
+  const box = el("div", "local");
+  box.appendChild(el("div", "local-head", "Read it against your own checkout"));
+  box.appendChild(el("p", "local-why",
+    "Locally every line number opens your editor, and every snippet is checked against your " +
+    "working tree on each load. This page has neither, so it shows what the publisher's tree said."));
+
+  const cmd = "cw open " + location.origin + location.pathname;
+  const row = el("div", "copyrow");
+  const input = el("input");
+  input.type = "text";
+  input.readOnly = true;
+  input.spellcheck = false;
+  input.value = cmd;
+  input.setAttribute("aria-label", "the command that opens this walkthrough locally");
+  input.addEventListener("focus", () => input.select());
+  row.appendChild(input);
+
+  const btn = el("button", "copy", "copy");
+  btn.type = "button";
+  btn.addEventListener("click", async () => {
+    if (await copyText(cmd)) {
+      btn.textContent = "copied";
+      btn.classList.add("done");
+      setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("done"); }, 1600);
+    } else {
+      input.focus();
+      toast("Could not reach the clipboard. The command is selected, so copy it", true);
+    }
+  });
+  row.appendChild(btn);
+  box.appendChild(row);
+
+  const hint = el("p", "local-hint");
+  hint.appendChild(document.createTextNode("Needs cw on your machine: "));
+  hint.appendChild(el("code", "md", "go install github.com/sjroesink/cw@latest"));
+  if (state.data.meta && state.data.meta.locked) {
+    hint.appendChild(document.createTextNode(
+      ". This walkthrough is locked, so add --password if you had to type one to get in."));
+  }
+  box.appendChild(hint);
+  return box;
+}
+
+// copyText prefers the clipboard API and falls back to the old selection trick,
+// which is what an http origin or an older browser leaves you.
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through, the selection still works */ }
+  try {
+    const t = el("textarea");
+    t.value = text;
+    t.style.position = "fixed";
+    t.style.opacity = "0";
+    document.body.appendChild(t);
+    t.select();
+    const ok = document.execCommand("copy");
+    t.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function trail(bits) {
@@ -893,7 +971,7 @@ function refPanel(ref) {
   const box = el("div", "refbox");
   const head = el("div", "rhead");
   head.appendChild(el("span", "rlabel", ref.label || ""));
-  head.appendChild(el("span", "where", ref.file + ":" + (ref.from || 1)));
+  head.appendChild(fileName(ref.file, ref.from || 1, ref.to, ":" + (ref.from || 1)));
   head.appendChild(el("span", "grow"));
   head.appendChild(openButton(ref.file, ref.from || 1, "open-accent", ref.to));
   const close = el("button", "close-btn", "close");
@@ -946,7 +1024,7 @@ function panelCode(code) {
 
   const box = el("div", "codebox" + (openNote ? " with-note" : ""));
   const head = el("div", "code-head");
-  head.appendChild(el("span", "file", code.file));
+  head.appendChild(fileName(code.file, code.from || 1, code.to));
   if (code.note) head.appendChild(el("span", "tag", code.note));
   const tag = checkTag(code.check);
   if (tag) head.appendChild(tag);
@@ -1004,7 +1082,7 @@ function panelCode(code) {
 function panelDiff(diff) {
   const wrap = el("div", "diff");
   const head = el("div", "diff-head");
-  head.appendChild(el("span", "file", diff.file));
+  head.appendChild(fileName(diff.file, diff.from || 1));
   head.appendChild(el("span", "grow"));
   head.appendChild(openButton(diff.file, diff.from || 1, "open-dark"));
   const toggle = el("button", "open-dark", state.split ? "unified view" : "side-by-side view");
@@ -1127,6 +1205,42 @@ function githubHref(file, line, to) {
     return g.blobBase + file + at;
   }
   return g.prFiles || null;
+}
+
+/* A path in a panel head is long, wraps onto a second line and puts the half
+   that identifies it last. So what is shown is the base name, the whole path is
+   one hover away, and the name itself opens the file: in an editor locally, on
+   the pull request or the blob when this is the hosted page. The explicit button
+   stays, because it is the one that says where it will open. */
+function fileName(file, line, to, extra) {
+  const short = baseName(file) + (extra || "");
+  const where = HOSTED ? "opens on GitHub" : "opens in " + whereOpens();
+
+  if (!HOSTED) {
+    const b = el("button", "file", short);
+    b.type = "button";
+    b.title = file + " · " + where;
+    b.addEventListener("click", () => openAt(file, line));
+    return b;
+  }
+  const href = githubHref(file, line, to);
+  if (!href) {
+    const span = el("span", "file plain", short);
+    span.title = file;
+    return span;
+  }
+  const a = el("a", "file", short);
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noreferrer";
+  a.title = file + " · " + where;
+  return a;
+}
+
+// baseName keeps the tail of a path written with either separator.
+function baseName(file) {
+  const cut = Math.max(String(file).lastIndexOf("/"), String(file).lastIndexOf("\\"));
+  return cut < 0 ? String(file) : String(file).slice(cut + 1);
 }
 
 function openButton(file, line, cls, to) {

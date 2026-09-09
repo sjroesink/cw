@@ -265,7 +265,7 @@
               "code": {
                 "file": "web/app.js",
                 "from": 1022,
-                "text": "\n  const text = (list) => list.map((l) => l.t).join(\"\\n\");\n  if (!state.split) {\n    const body = el(\"div\", \"diff-body\");\n    for (const l of diff.lines) body.appendChild(rowFor(l));\n    wrap.appendChild(body);\n    highlightInto(body, text(diff.lines), diff.file);\n  } else {\n    const grid = el(\"div\", \"diff-split\");\n    for (const [label, keep] of [[\"before\", \"add\"], [\"after\", \"del\"]]) {\n      const col = el(\"div\");\n      col.appendChild(el(\"div\", \"side\", label));",
+                "text": "  const notes = code.notes || [];\n  const openNote = notes.find((n) => n.line === state.note);\n\n  const box = el(\"div\", \"codebox\" + (openNote ? \" with-note\" : \"\"));\n  const head = el(\"div\", \"code-head\");\n  head.appendChild(fileName(code.file, code.from || 1, code.to));\n  if (code.note) head.appendChild(el(\"span\", \"tag\", code.note));\n  const tag = checkTag(code.check);\n  if (tag) head.appendChild(tag);\n  head.appendChild(el(\"span\", \"grow\"));\n  head.appendChild(openButton(code.file, code.from || 1, \"open-dark\", code.to));\n  box.appendChild(head);",
                 "lang": "javascript",
                 "hi": [
                   1025,
