@@ -27,7 +27,7 @@
               "blocks": [
                 {
                   "type": "markdown",
-                  "text": "In cw/1 a step had one `body` and four optional slots, and the page decided what order they came in. A cw/2 step has **blocks**, in the order they were written, as many as it needs.\n\nA reader has to handle this much markdown:\n\n- paragraphs, and *emphasis* inside them\n- lists, this one included\n- fenced code, for the times the code is not a snippet of anything\n\nAnything past that it shows as the characters that are there, which is allowed and is what keeps `<img src=x onerror=alert(1)>` a piece of text."
+                  "text": "In cw/1 a step had one `body` and four optional slots, and the page decided what order they came in. A cw/2 step has **blocks**, in the order they were written, as many as it needs.\n\n## The markdown a reader has to handle\n\n- paragraphs, and *emphasis* inside them\n- lists, this one included, one level of nesting deep:\n  - like this\n- fenced code, for the times the code is not a snippet of anything:\n\n```json\n{ \"type\": \"markdown\", \"text\": \"...\" }\n```\n\n> And a quote, for when the words are somebody else's.\n\n---\n\nThat list is the whole of it. Anything past it a reader shows as the characters that are there, which is allowed and is what keeps `<img src=x onerror=alert(1)>` a piece of text."
                 },
                 {
                   "type": "markdown",

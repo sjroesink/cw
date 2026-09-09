@@ -559,7 +559,7 @@ func runServe(f flags) {
 	mux.HandleFunc("/api/settings", s.guard(s.handleSettings))
 	mux.HandleFunc("/api/ides", s.guard(s.handleIDEs))
 
-	fmt.Printf("%s\n", res.Doc.Title)
+	fmt.Printf("%s\n", res.View().Title)
 	fmt.Printf("  url       %s\n", url)
 	if root == "" {
 		fmt.Printf("  root      none: the open buttons will say so\n")
