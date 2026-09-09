@@ -1308,9 +1308,12 @@ function openSettings() {
   $("setIdeCommand").value = s.ideCommand || "";
   $("setIdePath").value = s.idePath || "";
   $("setTheme").value = s.theme || "auto";
-  $("settingsPath").textContent = HOSTED
-    ? "Kept in this browser. Nothing here is sent anywhere."
-    : (state.data.settingsPath || "");
+  // Locally this is the file the settings are written to, which is worth
+  // knowing. Hosted there is no file, and a line saying so is a line about
+  // nothing.
+  const where = HOSTED ? "" : (state.data.settingsPath || "");
+  $("settingsPath").textContent = where;
+  $("settingsPath").hidden = !where;
 
   const sw = $("swatches");
   sw.textContent = "";
