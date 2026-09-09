@@ -36,6 +36,11 @@ only copy: until `cw check` is clean the new one is not a walkthrough yet.
 It prints what it filled in, then a numbered list of what it could not work out. Read the list. It
 is the whole assignment, and nothing else in the file needs your attention.
 
+Expect roughly two entries per walkthrough, most of them an alt or a diff. Across sixteen real
+Fincent walkthroughs, 214 steps and 161 snippets, it printed 33: fifteen diagrams needing alt text,
+fifteen diffs kept as snippets, three ref notes that moved. Every one was answerable from the
+document plus git. A list far longer than that means something else is wrong.
+
 **3. Work the list.** Each kind of entry has one right answer.
 
 | What it says | What to do |
@@ -48,6 +53,7 @@ is the whole assignment, and nothing else in the file needs your attention.
 | `had a note, which became a paragraph` | Read it. A sentence about the code belongs in the paragraph where the lift put it; a two-word label belongs in `snippet.label` and the paragraph goes |
 | `is in state "..."` | Map it onto `idle`, `active`, `done`, `gone` or `alert`. Only you know which one was meant |
 | `the id "..." was already taken` | Nothing, unless the walkthrough is already published: then a renamed step id loses that step from everyone's saved progress. Say so in the reply |
+| `cut to 48 characters` | Same: a cut id is a renamed id. Nothing to fix, but if you want it readable, shorten the title before you migrate rather than the id after |
 | `root is not a field any more` | Nothing. Pass `--root` when you serve it |
 
 **4. Check it until it is clean.**

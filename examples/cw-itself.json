@@ -129,7 +129,7 @@
               "code": {
                 "file": "main.go",
                 "from": 623,
-                "text": "\t\tfmt.Printf(\"\\n%d warning(s):\\n\", len(res.Warnings))\n\t\tfor _, w := range res.Warnings {\n\t\t\tfmt.Printf(\"  - %s\\n\", w)\n\t\t}\n\t}\n\tfmt.Printf(\"\\nctrl-c to stop\\n\")\n\n\tif settings.OpenBrowser && !f.noOpen {\n\t\tgo func() {\n\t\t\ttime.Sleep(180 * time.Millisecond)\n\t\t\t_ = openURL(url)\n\t\t}()\n\t}",
+                "text": "\t}\n\tif len(res.Warnings) > 0 {\n\t\tfmt.Printf(\"\\n%d warning(s):\\n\", len(res.Warnings))\n\t\tfor _, w := range res.Warnings {\n\t\t\tfmt.Printf(\"  - %s\\n\", w)\n\t\t}\n\t}\n\tfmt.Printf(\"\\nctrl-c to stop\\n\")\n\n\tif settings.OpenBrowser && !f.noOpen {\n\t\tgo func() {\n\t\t\ttime.Sleep(180 * time.Millisecond)\n\t\t\t_ = openURL(url)",
                 "hi": [
                   625,
                   629

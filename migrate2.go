@@ -93,6 +93,12 @@ func (s *idSpace) claim(want, title, at string, note func(string, ...any)) strin
 	base := want
 	if base == "" {
 		base = slug(title)
+		// A long title is cut to fit, and a cut id is a renamed id: if this
+		// walkthrough is already published, that step loses everybody's saved
+		// place. Silently would be the wrong way to do that.
+		if len(slugFull(title)) > idLimit {
+			note("%s: the id was derived from the title and cut to %d characters, so it reads %q. If this walkthrough is already published, that step loses the progress readers had on it", at, idLimit, base)
+		}
 	}
 	if base == "" {
 		base = "item"

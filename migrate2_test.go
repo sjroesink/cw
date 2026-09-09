@@ -308,3 +308,34 @@ func TestWhatComesOutIsReadAsCw2(t *testing.T) {
 		t.Errorf("with the alt written in it should be clean:\n%s", strings.Join(res.Errors, "\n"))
 	}
 }
+
+// A title longer than an id can hold is cut, and a cut id is a renamed id. The
+// peer session that migrated sixteen walkthroughs hit one that landed exactly on
+// the limit, and nothing said so.
+func TestATruncatedIdSaysSoOutLoud(t *testing.T) {
+	long := "And the environment provider is kept, not replaced, when the host restarts"
+	d := &Doc{Version: FormatV1, Title: "t", Parts: []Part{{
+		Title: "One", Sections: []Section{{
+			Title: "Two", Steps: []Step{{Title: long, Body: "Prose."}},
+		}},
+	}}}
+
+	out, todo := LiftToV2(d, LiftOptions{})
+	id := out.Parts[0].Sections[0].Steps[0].ID
+	if len(id) != idLimit {
+		t.Fatalf("the id is %q, %d characters, and the limit is %d", id, len(id), idLimit)
+	}
+	if !strings.Contains(strings.Join(todo, "\n"), "cut to 48 characters") {
+		t.Errorf("the cut was silent:\n%s", strings.Join(todo, "\n"))
+	}
+
+	// A title that fits says nothing, because there is nothing to check.
+	short := &Doc{Version: FormatV1, Title: "t", Parts: []Part{{
+		Title: "One", Sections: []Section{{
+			Title: "Two", Steps: []Step{{Title: "A short one", Body: "Prose."}},
+		}},
+	}}}
+	if _, quiet := LiftToV2(short, LiftOptions{}); strings.Contains(strings.Join(quiet, "\n"), "cut to") {
+		t.Errorf("a title that fits was reported anyway:\n%s", strings.Join(quiet, "\n"))
+	}
+}

@@ -71,7 +71,24 @@ var idStrip = regexp.MustCompile(`-{2,}`)
 // slug turns a title into an id: lowercase, ascii, words joined by dashes. It is
 // only ever a starting point, because two steps may well be called the same
 // thing; EnsureIDs is what makes the result unique.
+// idLimit is how much of a title an id keeps. The schema allows 64; this is
+// shorter because an id ends up in a URL somebody pastes into a channel.
+const idLimit = 48
+
 func slug(title string) string {
+	out := slugFull(title)
+	if len(out) > idLimit {
+		out = strings.Trim(out[:idLimit], "-")
+	}
+	if out == "" {
+		return "x"
+	}
+	return out
+}
+
+// slugFull is the same name without the cut, so a caller can tell whether the
+// cut happened rather than guessing from the length.
+func slugFull(title string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(title)) {
 		switch {
@@ -81,14 +98,7 @@ func slug(title string) string {
 			b.WriteRune('-')
 		}
 	}
-	out := strings.Trim(idStrip.ReplaceAllString(b.String(), "-"), "-")
-	if len(out) > 48 {
-		out = strings.Trim(out[:48], "-")
-	}
-	if out == "" {
-		return "x"
-	}
-	return out
+	return strings.Trim(idStrip.ReplaceAllString(b.String(), "-"), "-")
 }
 
 // EnsureIDs fills in every id that is missing and leaves every id that is

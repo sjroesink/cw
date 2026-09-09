@@ -34,7 +34,9 @@ const usageText = `cw: serve a code walkthrough as a page you can step through.
 
   cw serve <walkthrough.json> [flags]   open it in a browser
   cw check <walkthrough.json> [flags]   validate against the schema, no server
-  cw migrate <walkthrough.json>         lift an older file to cw/1 and fill in ids and anchors
+  cw migrate <walkthrough.json>         fill in the ids and anchors a file is missing
+  cw migrate --to cw/2 <file>           lift a cw/1 file, and say what it could not work out
+             [--assume-diff-start]      take a cw/1 diff's one line number for both sides
   cw schema [--write]                   print the JSON schema, or write a copy to point at
   cw ides                               list the editors found on this machine
   cw settings [--path]                  print the settings file
