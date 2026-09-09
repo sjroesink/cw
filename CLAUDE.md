@@ -51,6 +51,21 @@ not, and needs a new version string with both served. `spec/FORMAT.md` states th
 a promise. `ext` is the escape hatch for anything one consumer needs and the format has no opinion
 about.
 
+## Who may read what
+
+`gate.go` is the only place that decides. Two independent locks, a password and a list of
+addresses, and a walkthrough that sets both needs both. The key that can change a walkthrough also
+opens it, which is what lets whoever published it read their own page.
+
+Both secrets live in their own file beside the walkthrough rather than in `meta.json`, because
+`meta.json` is handed to every reader. Keep it that way: a secret that is not in the struct that
+gets serialised cannot leak by someone adding a field to a response, and there is a test that fails
+if one ever ends up in one.
+
+The address a rule is checked against comes from `clientIP` in `access.go`, which believes a header
+only when every hop that could have written it is in `CW_TRUSTED_PROXIES`. `TestAForgedForwardedForIsIgnored`
+is the test that matters there; do not weaken it to make something convenient work.
+
 ## What the hosted page cannot do
 
 It has no working tree and no editor. So there is no `/api/open`, no live snippet check, and the

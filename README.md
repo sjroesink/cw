@@ -38,6 +38,17 @@ Publishing is open: anyone who can reach the site can put a walkthrough on it. W
 key for that one walkthrough, and it is the only thing that can change it afterwards. Only its hash
 is stored, so a lost key means asking whoever runs the site, whose admin key works on everything.
 
+A walkthrough can be locked with a password, with a list of addresses, or with both, and both are
+needed when both are set. A locked one is not listed to anyone who has not opened it. Passwords are
+stored as salted PBKDF2, and an unlock is a cookie signed over that one name, so it does not open
+anything else.
+
+Behind a proxy, the address a rule is checked against is only as trustworthy as the hop that
+reported it. `CW_TRUSTED_PROXIES` is the list of hops that may be believed, as addresses or CIDRs;
+without it the private ranges and Cloudflare's published edges are trusted, and anything else is
+taken at its socket address. `GET /api/v1/whoami` says what the site makes of a given caller, which
+is how to check a rule before it locks somebody out.
+
 `serve` opens a browser on 127.0.0.1. Without `--root` the root is `root` from the walkthrough, else
 the git root the file sits in. Without any root the page still reads: the open buttons say so and
 nothing is checked against a tree.

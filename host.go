@@ -28,6 +28,9 @@ quietly showing yesterday's code as if it were today's.
 //go:embed web/landing.html
 var landingHTML string
 
+//go:embed web/unlock.html
+var unlockHTML string
+
 type hostServer struct {
 	store  *Store
 	schema *schemaDoc
@@ -35,6 +38,11 @@ type hostServer struct {
 	web    fs.FS
 	base   string
 	dev    bool
+
+	// What may be believed about who is calling, and what signs an unlock.
+	trusted     *netList
+	trustedFrom string
+	secret      []byte
 }
 
 func cmdHost(args []string) {
@@ -89,9 +97,18 @@ func cmdHost(args []string) {
 	if err != nil {
 		die("the web assets are missing from this build: %v", err)
 	}
+	trusted, from, err := trustedProxies()
+	if err != nil {
+		die("%v", err)
+	}
+	secret, err := store.Secret()
+	if err != nil {
+		die("could not read or make the site secret: %v", err)
+	}
+
 	settings, _, _ := LoadSettings()
 	h := &hostServer{store: store, schema: mustSchema(), vendor: NewVendor(settings.Offline),
-		web: sub, base: base, dev: dev}
+		web: sub, base: base, dev: dev, trusted: trusted, trustedFrom: from, secret: secret}
 	h.vendor.Prewarm()
 
 	ln, err := net.Listen("tcp", addr)
@@ -108,6 +125,8 @@ func cmdHost(args []string) {
 	fmt.Printf("  base url  %s\n", h.base)
 	fmt.Printf("  data      %s\n", store.Dir)
 	fmt.Printf("  keys      %d\n", len(keys))
+	fmt.Printf("  trusting  %s\n", h.trustedFrom)
+	fmt.Printf("            GET %s/api/v1/whoami says which address a caller looks like from here\n", h.base)
 	if len(keys) == 0 {
 		fmt.Printf("\nNothing can be published yet. Add a key with:\n  cw keys add <name> --data %s\n", store.Dir)
 	}
@@ -138,6 +157,8 @@ func (h *hostServer) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/walkthroughs", h.handleCreate)
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}", h.handleGet)
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}/state", h.handleState)
+	mux.HandleFunc("POST /api/v1/walkthroughs/{slug}/unlock", h.handleUnlock)
+	mux.HandleFunc("GET /api/v1/whoami", h.handleWhoami)
 	mux.HandleFunc("PUT /api/v1/walkthroughs/{slug}", h.owned(h.handleReplace))
 	mux.HandleFunc("DELETE /api/v1/walkthroughs/{slug}", h.owned(h.handleDelete))
 	mux.HandleFunc("POST /api/v1/validate", h.handleValidate)
@@ -178,6 +199,12 @@ func (h *hostServer) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A locked walkthrough gets a page that asks, rather than the reader
+	// getting the real page and watching it fail to load its own content.
+	if g := h.mayRead(r, slug); !g.open() {
+		h.unlockPage(w, slug, g)
+		return
+	}
 	raw, err := h.indexHTML()
 	if err != nil {
 		http.Error(w, "index.html is missing from this build", http.StatusInternalServerError)
@@ -201,7 +228,8 @@ func (h *hostServer) indexHTML() ([]byte, error) {
 // is linked from here because the fastest way to explain this site to someone
 // is to show them the sentence they can paste at their own agent.
 func (h *hostServer) handleLanding(w http.ResponseWriter, r *http.Request) {
-	list, _ := h.store.List()
+	all, _ := h.store.List()
+	list := h.visible(r, all)
 	rows := &strings.Builder{}
 	if len(list) == 0 {
 		rows.WriteString(`<p class="empty">Nothing published yet.</p>`)
@@ -305,4 +333,34 @@ func countOf(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// unlockPage is what a locked walkthrough shows instead of itself: a password
+// box, or a plain no for an address that is not allowed in. It says which of the
+// two it is, because "it does not work" is the least useful thing a page can say.
+func (h *hostServer) unlockPage(w http.ResponseWriter, slug string, g gate) {
+	title, blurb, form := "Locked", "", "block"
+	if g.BlockedByIP {
+		title = "Not from here"
+		blurb = "This walkthrough is limited to certain addresses, and " + html.EscapeString(g.IP.String()) +
+			" is not one of them. Ask whoever published it to add you."
+		form = "none"
+	} else {
+		blurb = "This walkthrough is protected. Enter the password you were given."
+	}
+	page := strings.NewReplacer(
+		"__TITLE__", html.EscapeString(title),
+		"__BLURB__", blurb,
+		"__FORM__", form,
+		"__SLUG__", html.EscapeString(slug),
+	).Replace(unlockHTML)
+
+	code := http.StatusUnauthorized
+	if g.BlockedByIP {
+		code = http.StatusForbidden
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	_, _ = w.Write([]byte(page))
 }

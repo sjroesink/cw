@@ -52,6 +52,12 @@ type apiResult struct {
 type envelope struct {
 	Slug        string          `json:"slug"`
 	Walkthrough json.RawMessage `json:"walkthrough"`
+
+	// Who may read it. Absent leaves the lock exactly as it is, which is what
+	// makes updating a walkthrough without restating its policy safe. Empty
+	// takes the lock off.
+	Password *string   `json:"password"`
+	Allow    *[]string `json:"allow"`
 }
 
 func (h *hostServer) fail(w http.ResponseWriter, code int, format string, a ...any) {
@@ -89,31 +95,47 @@ func (h *hostServer) owned(next func(http.ResponseWriter, *http.Request, string)
 // readDoc turns a request body into a validated walkthrough. It returns the
 // wanted name separately, because the name is about where the document is
 // published and not about what it says.
-func (h *hostServer) readDoc(r *http.Request) (*Doc, string, *LoadResult, error) {
+func (h *hostServer) readDoc(r *http.Request) (*Doc, envelope, *LoadResult, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxBody))
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("could not read the body, or it is over %d MB: %w", maxBody>>20, err)
+		return nil, envelope{}, nil, fmt.Errorf("could not read the body, or it is over %d MB: %w", maxBody>>20, err)
 	}
-	body, want := raw, ""
+	body, env := raw, envelope{}
 
 	// An envelope is recognised by the one key that only it has, so a bare
 	// walkthrough is never mistaken for one.
 	var probe map[string]json.RawMessage
 	if json.Unmarshal(raw, &probe) == nil {
 		if _, isEnvelope := probe["walkthrough"]; isEnvelope {
-			var env envelope
 			if err := json.Unmarshal(raw, &env); err != nil {
-				return nil, "", nil, err
+				return nil, envelope{}, nil, err
 			}
-			body, want = env.Walkthrough, env.Slug
+			body = env.Walkthrough
 		}
 	}
 
 	res, err := ParseDoc(body, "the posted walkthrough", h.schema)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, envelope{}, nil, err
 	}
-	return res.Doc, want, res, nil
+	return res.Doc, env, res, nil
+}
+
+// applyPolicy sets the lock on a walkthrough. A field that was not sent leaves
+// that half of the lock alone, so updating the content of a protected
+// walkthrough does not quietly unprotect it.
+func (h *hostServer) applyPolicy(slug string, env envelope) error {
+	if env.Password != nil {
+		if err := h.store.SetPassword(slug, *env.Password); err != nil {
+			return err
+		}
+	}
+	if env.Allow != nil {
+		if err := h.store.SetAllow(slug, *env.Allow); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------- publishing
@@ -121,7 +143,7 @@ func (h *hostServer) readDoc(r *http.Request) (*Doc, string, *LoadResult, error)
 // handleCreate needs no key. Anyone who can reach the site can put a walkthrough
 // on it, and what they get back is the key to their own.
 func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request) {
-	d, want, res, err := h.readDoc(r)
+	d, env, res, err := h.readDoc(r)
 	if err != nil {
 		h.fail(w, http.StatusBadRequest, "%v", err)
 		return
@@ -131,6 +153,13 @@ func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request) {
 			Message: "the walkthrough was not stored"})
 		return
 	}
+	if env.Allow != nil && len(*env.Allow) > 0 {
+		if _, err := parseNets(*env.Allow); err != nil {
+			h.fail(w, http.StatusBadRequest, "%v", err)
+			return
+		}
+	}
+	want := env.Slug
 	if want != "" && !ValidSlug(want) {
 		h.fail(w, http.StatusBadRequest, "%q cannot be a walkthrough name: lowercase letters, digits and dashes, up to 64 characters", want)
 		return
@@ -146,11 +175,11 @@ func (h *hostServer) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if name, ok := h.store.MatchKey(bearer(r)); ok {
 		publisher = name
 	}
-	h.save(w, slug, d, res, publisher, time.Time{}, true)
+	h.save(w, slug, d, res, publisher, time.Time{}, true, env)
 }
 
 func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, slug string) {
-	d, _, res, err := h.readDoc(r)
+	d, env, res, err := h.readDoc(r)
 	if err != nil {
 		h.fail(w, http.StatusBadRequest, "%v", err)
 		return
@@ -160,16 +189,22 @@ func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, slug 
 			Message: "the walkthrough was not stored, and what was there is untouched"})
 		return
 	}
+	if env.Allow != nil && len(*env.Allow) > 0 {
+		if _, err := parseNets(*env.Allow); err != nil {
+			h.fail(w, http.StatusBadRequest, "%v", err)
+			return
+		}
+	}
 	created, publisher := time.Time{}, ""
 	if _, old, err := h.store.Get(slug); err == nil {
 		created, publisher = old.CreatedAt, old.Publisher
 	}
-	h.save(w, slug, d, res, publisher, created, false)
+	h.save(w, slug, d, res, publisher, created, false, env)
 }
 
 // save is the last stretch both publishing paths share: fill in what a
 // publisher should not have to type, work out what was verified, write it.
-func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time, fresh bool) {
+func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time, fresh bool, env envelope) {
 	d.Version = FormatVersion
 	d.Schema = strings.TrimRight(h.base, "/") + "/schema/v1.json"
 	EnsureIDs(d)
@@ -179,10 +214,17 @@ func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadR
 	if created.IsZero() {
 		created = now
 	}
+	// The lock is set before the metadata is written, so that Locked is the
+	// truth about the walkthrough as it now stands rather than as it was.
+	if err := h.applyPolicy(slug, env); err != nil {
+		h.fail(w, http.StatusBadRequest, "%v", err)
+		return
+	}
 	m := Meta{
 		Slug: slug, Title: d.Title, Summary: d.Summary, Steps: d.Steps(),
 		Publisher: publisher, CreatedAt: created, UpdatedAt: now,
 		Verified: verdictOf(d, now),
+		Locked:   h.store.HasPassword(slug) || len(h.store.Allow(slug)) > 0,
 	}
 	if d.Source != nil {
 		m.Repo, m.Number, m.URL = d.Source.Repo, d.Source.Number, d.Source.URL
@@ -287,16 +329,23 @@ func (h *hostServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 // without one. Guarding the index while leaving the items open would protect
 // nothing and only make the site harder to find your way around.
 func (h *hostServer) handleList(w http.ResponseWriter, r *http.Request) {
-	list, err := h.store.List()
+	all, err := h.store.List()
 	if err != nil {
 		h.fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"walkthroughs": list})
+	writeJSON(w, http.StatusOK, map[string]any{"walkthroughs": h.visible(r, all)})
 }
 
 func (h *hostServer) handleGet(w http.ResponseWriter, r *http.Request) {
-	p, err := h.payload(r.PathValue("slug"))
+	slug := r.PathValue("slug")
+	if h.store.Exists(slug) {
+		if g := h.mayRead(r, slug); !g.open() {
+			h.refuse(w, slug, g)
+			return
+		}
+	}
+	p, err := h.payload(slug)
 	if err != nil {
 		if errors.Is(err, ErrNoSuchWalkthrough) {
 			h.fail(w, http.StatusNotFound, "no walkthrough called %q", r.PathValue("slug"))
@@ -312,6 +361,12 @@ func (h *hostServer) handleGet(w http.ResponseWriter, r *http.Request) {
 // a page left open overnight is not re-downloading the whole walkthrough to
 // find out that nothing changed.
 func (h *hostServer) handleState(w http.ResponseWriter, r *http.Request) {
+	if slug := r.PathValue("slug"); h.store.Exists(slug) {
+		if g := h.mayRead(r, slug); !g.open() {
+			h.refuse(w, slug, g)
+			return
+		}
+	}
 	_, m, err := h.store.Get(r.PathValue("slug"))
 	if err != nil {
 		h.fail(w, http.StatusNotFound, "no walkthrough called %q", r.PathValue("slug"))

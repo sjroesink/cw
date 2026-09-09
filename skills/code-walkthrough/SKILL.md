@@ -92,6 +92,7 @@ the only requirement; the binary has no dependencies of its own.
 cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
 cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an error
 cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
+           [--password PW | --no-password] [--allow CIDR,... | --no-allow]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
 cw migrate <walkthrough.json>              lift an older file to cw/1
 cw schema [--write]                        print the JSON schema, or write a copy to point at
@@ -109,6 +110,21 @@ file lives in a repository.
 
 Someone else who needs to change your walkthrough needs that key from you. Whoever runs
 the site has an admin key that works on everything, which is the way back if it is lost.
+
+## Locking one
+
+`--password` puts a password on it, `--allow` limits it to addresses or ranges, and a
+walkthrough with both needs both. Use them when the person asking says so, and use the
+password they give you rather than inventing one. `$env:CW_PASSWORD` keeps it out of shell
+history. A locked walkthrough is not listed to anyone who has not opened it.
+
+On a later publish, leave the flags off and the lock stays exactly as it was.
+`--no-password` and `--no-allow` are how you take it off on purpose.
+
+Before writing an address list, check what the site makes of the address you mean:
+`curl https://cw.roesink.dev/api/v1/whoami`. Behind Cloudflare the address a rule sees is
+not always the one you expect, and a list that locks out the person who wrote it is the
+usual way this goes wrong.
 
 ## The two readers, and what each can do
 

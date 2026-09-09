@@ -36,6 +36,7 @@ const usageText = `cw: serve a code walkthrough as a page you can step through.
 
 Sharing one:
   cw publish <walkthrough.json> [--site URL] [--slug NAME] [--new] [--force]
+             [--password PW | --no-password] [--allow CIDR,... | --no-allow]
   cw open <url or name> [--root DIR]    read a published one with the local buttons
 
 Serving the site rather than one file:

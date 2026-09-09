@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -8,10 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +31,8 @@ that is a good problem to have first.
 	<data>/walkthroughs/<slug>/doc.json    the walkthrough itself, cw/1
 	<data>/walkthroughs/<slug>/meta.json   when it was published and what was verified
 	<data>/walkthroughs/<slug>/key         the hash of the key that may change it
+	<data>/walkthroughs/<slug>/password    the hash of the password to read it, if it has one
+	<data>/secret                          what unlock cookies are signed with
 	<data>/keys.json                       admin keys, as hashes
 
 The edit key lives in its own file rather than in meta.json, because meta.json
@@ -55,14 +61,18 @@ type Store struct {
 // It is kept beside the document rather than inside it, so the document stays a
 // portable file that says nothing about where it happens to be hosted.
 type Meta struct {
-	Slug      string    `json:"slug"`
-	Title     string    `json:"title"`
-	Summary   string    `json:"summary,omitempty"`
-	Repo      string    `json:"repo,omitempty"`
-	Number    string    `json:"number,omitempty"`
-	URL       string    `json:"url,omitempty"`
-	Publisher string    `json:"publisher,omitempty"`
-	Steps     int       `json:"steps"`
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	Summary   string `json:"summary,omitempty"`
+	Repo      string `json:"repo,omitempty"`
+	Number    string `json:"number,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Publisher string `json:"publisher,omitempty"`
+	Steps     int    `json:"steps"`
+	// Locked says the walkthrough asks something of a reader before it opens.
+	// It is a fact about the page, not a secret, and it is what keeps a
+	// protected walkthrough out of a listing somebody else is reading.
+	Locked    bool      `json:"locked,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Verified  *Verified `json:"verified,omitempty"`
@@ -390,6 +400,18 @@ func (s *Store) MatchKey(presented string) (string, bool) {
 	return name, found
 }
 
+// hmacHex signs a short string with the site secret. Used for unlock cookies,
+// which have to be unforgeable and mean nothing on their own.
+func hmacHex(secret []byte, msg string) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(msg))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func constantEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
 func hashKey(key string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(key)))
 	return hex.EncodeToString(sum[:])
@@ -421,4 +443,198 @@ func readJSONFile(path string, v any) error {
 		return err
 	}
 	return json.Unmarshal(raw, v)
+}
+
+// ---------------------------------------------------------------- passwords
+
+/*
+A walkthrough can be locked with a password. It is a shared secret on a link,
+not an account, so what matters is that the stored form is useless when the
+volume leaks: a random salt and enough PBKDF2 rounds that guessing the password
+from the hash costs more than it is worth.
+
+Like the edit key, it lives in its own file rather than in meta.json, which is
+handed to every reader.
+*/
+
+const pbkdf2Rounds = 600_000
+
+func (s *Store) passwordPathFor(slug string) string {
+	return filepath.Join(s.dirFor(slug), "password")
+}
+
+// SetPassword locks a walkthrough, or unlocks it when given an empty one.
+func (s *Store) SetPassword(slug, plain string) error {
+	if !ValidSlug(slug) {
+		return ErrNoSuchWalkthrough
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	path := s.passwordPathFor(slug)
+	if plain == "" {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(s.dirFor(slug), 0o755); err != nil {
+		return err
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return err
+	}
+	sum, err := pbkdf2.Key(sha256.New, plain, salt, pbkdf2Rounds, 32)
+	if err != nil {
+		return err
+	}
+	line := fmt.Sprintf("pbkdf2$sha256$%d$%s$%s", pbkdf2Rounds, hex.EncodeToString(salt), hex.EncodeToString(sum))
+	return os.WriteFile(path, []byte(line), 0o600)
+}
+
+func (s *Store) HasPassword(slug string) bool {
+	if !ValidSlug(slug) {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, err := os.Stat(s.passwordPathFor(slug))
+	return err == nil && st.Size() > 0
+}
+
+// CheckPassword answers whether this is the password, and false for a
+// walkthrough that has none: a caller should ask HasPassword first, so that
+// "no password set" never reads as "any password will do".
+func (s *Store) CheckPassword(slug, plain string) bool {
+	if !ValidSlug(slug) || plain == "" {
+		return false
+	}
+	s.mu.RLock()
+	raw, err := os.ReadFile(s.passwordPathFor(slug))
+	s.mu.RUnlock()
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(strings.TrimSpace(string(raw)), "$")
+	if len(parts) != 5 || parts[0] != "pbkdf2" || parts[1] != "sha256" {
+		return false
+	}
+	rounds, err := strconv.Atoi(parts[2])
+	if err != nil || rounds < 1 {
+		return false
+	}
+	salt, err1 := hex.DecodeString(parts[3])
+	want, err2 := hex.DecodeString(parts[4])
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	got, err := pbkdf2.Key(sha256.New, plain, salt, rounds, len(want))
+	if err != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
+// Secret is what unlock cookies are signed with. It is made once and kept, so
+// that a restart does not sign everybody out.
+func (s *Store) Secret() ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	path := filepath.Join(s.Dir, "secret")
+	if raw, err := os.ReadFile(path); err == nil && len(raw) >= 32 {
+		return raw, nil
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, secret, 0o600); err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+// ---------------------------------------------------------------- addresses
+
+/*
+A walkthrough can also be limited to a set of addresses. Where a password is a
+secret the reader has to know, this is a fact about where they are, and the two
+are independent: a walkthrough with both needs both, because being on the office
+network is not the same claim as knowing the password and neither should stand
+in for the other.
+*/
+
+func (s *Store) allowPathFor(slug string) string {
+	return filepath.Join(s.dirFor(slug), "allow")
+}
+
+// SetAllow limits a walkthrough to these addresses and ranges. An empty list
+// removes the limit. Every entry is parsed before anything is written, so a
+// typo cannot lock a walkthrough away from everybody.
+func (s *Store) SetAllow(slug string, entries []string) error {
+	if !ValidSlug(slug) {
+		return ErrNoSuchWalkthrough
+	}
+	var keep []string
+	for _, e := range entries {
+		if e = strings.TrimSpace(e); e != "" {
+			keep = append(keep, e)
+		}
+	}
+	if len(keep) > 0 {
+		if _, err := parseNets(keep); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := s.allowPathFor(slug)
+	if len(keep) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(s.dirFor(slug), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"), 0o644)
+}
+
+// Allow is the list as it was written, for showing back to whoever set it.
+func (s *Store) Allow(slug string) []string {
+	if !ValidSlug(slug) {
+		return nil
+	}
+	s.mu.RLock()
+	raw, err := os.ReadFile(s.allowPathFor(slug))
+	s.mu.RUnlock()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// AllowsIP answers whether this address may read it. A walkthrough with no list
+// allows everyone; one with a list that cannot be parsed allows nobody, because
+// the alternative is a restriction that quietly is not one.
+func (s *Store) AllowsIP(slug string, ip net.IP) bool {
+	entries := s.Allow(slug)
+	if len(entries) == 0 {
+		return true
+	}
+	list, err := parseNets(entries)
+	if err != nil {
+		return false
+	}
+	return list.has(ip)
 }

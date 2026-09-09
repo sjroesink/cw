@@ -23,10 +23,10 @@ var agentIntroMD string
 //go:embed docs/agent-api.md
 var agentAPIMD string
 
-//go:embed skill/RULES.md
+//go:embed skills/code-walkthrough/RULES.md
 var rulesMD string
 
-//go:embed skill/DATA.md
+//go:embed skills/code-walkthrough/DATA.md
 var dataMD string
 
 //go:embed spec/FORMAT.md
@@ -62,7 +62,8 @@ every field of the format, and the API to publish it. Do not work from this file
 
 Publishing needs no key. What comes back is a key for that one walkthrough, and it is the
 only thing that can change it afterwards, sent as: Authorization: Bearer cwp_...
-Reading needs nothing.
+Reading needs nothing, unless the walkthrough was published with a password or limited to
+a set of addresses, which the person asking for it can ask you to do.
 
     GET  __BASE__/skill.md                     what to write and how to publish it
     GET  __BASE__/schema/v1.json               the JSON schema, for validating while you write

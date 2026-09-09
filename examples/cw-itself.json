@@ -128,7 +128,7 @@
               "code": {
                 "file": "main.go",
                 "from": 580,
-                "text": "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}",
+                "text": "// caller is turned away before anything is read or opened.\nfunc (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}",
                 "hi": [
                   582,
                   586
@@ -206,7 +206,7 @@
               "code": {
                 "file": "publish.go",
                 "from": 109,
-                "text": "\t// The tree check is the whole reason to publish from here rather than by\n\t// posting the file from anywhere.\n\troot := resolveRoot(flags{file: f.file, root: f.root}, d)\n\ttree := &Tree{Root: root}\n\tchecked, moved, stale := tree.Verify(d)\n\tif root == \"\" {\n\t\tfmt.Fprintf(os.Stderr, \"cw: no working tree was found, so the snippets were not checked. \"+\n\t\t\t\"The page will say the code is unverified.\\n\")\n\t}\n\tif stale > 0 && !f.force {\n\t\tfmt.Fprintf(os.Stderr, \"cw: %d snippet(s) are no longer in the working tree. Run cw check to see which, \"+\n\t\t\t\"fix them, or publish with --force to say it out loud on the page.\\n\", stale)\n\t\tos.Exit(1)\n\t}",
+                "text": "\t\t\t\tdie(\"give one walkthrough file, got %q and %q\", f.file, a)\n\t\t\t}\n\t\t\tf.file = a\n\t\t}\n\t}\n\tif f.file == \"\" {\n\t\tdie(\"give a walkthrough file\")\n\t}\n\tf.site = strings.TrimRight(f.site, \"/\")\n\t// A password on a command line ends up in shell history, so the\n\t// environment is the better way in and is read when no flag was given.\n\tif f.password == nil {\n\t\tif v, set := os.LookupEnv(\"CW_PASSWORD\"); set {\n\t\t\tf.password = &v",
                 "hi": [
                   113,
                   118
@@ -219,7 +219,7 @@
               "code": {
                 "file": "api.go",
                 "from": 155,
-                "text": "\t\th.fail(w, http.StatusBadRequest, \"%v\", err)\n\t\treturn\n\t}\n\tif len(res.Errors) > 0 {\n\t\twriteJSON(w, http.StatusBadRequest, apiResult{Errors: res.Errors, Warnings: res.Warnings,\n\t\t\tMessage: \"the walkthrough was not stored, and what was there is untouched\"})",
+                "text": "\t}\n\tif env.Allow != nil && len(*env.Allow) > 0 {\n\t\tif _, err := parseNets(*env.Allow); err != nil {\n\t\t\th.fail(w, http.StatusBadRequest, \"%v\", err)\n\t\t\treturn\n\t\t}",
                 "hi": [
                   158,
                   159

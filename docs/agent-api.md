@@ -49,6 +49,29 @@ send `{"slug": "...", "walkthrough": { ... }}` instead of the bare document. A n
 gets a number appended, and asking for a taken name outright is refused rather than overwriting what
 is already there.
 
+## Locking it
+
+The same envelope decides who may read it. Both are optional and independent, and a walkthrough that
+sets both needs both: being at an allowed address is not the same claim as knowing the password.
+
+```json
+{ "slug": "fincent-pr-3347",
+  "password": "the one you were told to use",
+  "allow": ["203.0.113.0/24", "198.51.100.7"],
+  "walkthrough": { }}
+```
+
+A locked walkthrough is not listed to anyone who has not opened it, so its title does not leak from
+the front page. Never invent a password: use the one the person asked for, and hand it back to them
+in your reply rather than leaving it only in a command.
+
+On an update, a field that is not sent leaves that half of the lock exactly as it was, so changing
+the content of a protected walkthrough does not quietly unprotect it. An empty value takes it off:
+`"password": ""` removes the password, `"allow": []` removes the address list.
+
+`GET /api/v1/whoami` says which address the site thinks you are calling from. Use it before writing
+an address list, so the list does not lock out the person who wrote it.
+
 Missing `id`s and missing snippet `sha`/`to` values are filled in on publish and come back in the
 stored document, so you do not have to write them by hand.
 
@@ -74,6 +97,8 @@ URL, and the link you already handed out keeps showing the old one.
 | `GET /api/v1/walkthroughs` | everything published, newest first |
 | `GET /api/v1/walkthroughs/<slug>` | the document and its metadata back |
 | `DELETE /api/v1/walkthroughs/<slug>` | remove it. Needs that walkthrough's key |
+| `POST /api/v1/walkthroughs/<slug>/unlock` | `{"password": "..."}`, and the reply sets a cookie for that one walkthrough |
+| `GET /api/v1/whoami` | the address you appear to be calling from |
 | `GET /schema/v1.json` | the schema, for validating while you write |
 | `GET /format` | the format specification, for writing a second reader |
 
@@ -82,7 +107,8 @@ URL, and the link you already handed out keeps showing the old one.
 | | |
 |---|---|
 | `400` | the document is wrong. `errors` says where, in the same words the local tool uses |
-| `401` | changing something without its key. Do not retry; ask the person who published it |
+| `401` | changing something without its key, or reading something locked without its password |
+| `403` | reading something that is limited to addresses yours is not among |
 | `404` | no walkthrough by that name |
 | `409` | the name you asked for is taken by someone else's walkthrough |
 | `413` | over the size limit. A walkthrough is prose and snippets, not an archive |

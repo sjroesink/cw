@@ -16,10 +16,16 @@ services:
       # a publish and into the instructions the site hands an agent, so getting
       # it wrong hands people links to a host they cannot reach.
       CW_BASE_URL: ${CW_BASE_URL:-http://127.0.0.1:8080}
-      # A key to start with, so a fresh volume is usable without a shell inside
-      # the container. Stored as a hash on first start, and only once. Leave it
-      # out and add keys with: docker compose exec cw /cw keys add <name>
+      # An admin key to start with, so a fresh volume has one without a shell
+      # inside the container. Stored as a hash on first start, and only once.
+      # It works on every walkthrough, which is how a lost edit key is
+      # recovered. Publishing needs no key at all.
       CW_BOOTSTRAP_KEY: ${CW_BOOTSTRAP_KEY:-}
+      # Which hops may be believed about who a caller is, as addresses or
+      # CIDRs. Everything behind a proxy reaches the container from that proxy,
+      # so without this an address rule would only ever see the proxy. Left
+      # unset, the private ranges and Cloudflare's published edges are trusted.
+      CW_TRUSTED_PROXIES: ${CW_TRUSTED_PROXIES:-}
 
 volumes:
   cw-data:

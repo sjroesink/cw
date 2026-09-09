@@ -39,6 +39,11 @@ type publishFlags struct {
 	slug  string
 	isNew bool
 	force bool
+
+	// The lock. Nil means leave it as it is, which is what makes republishing
+	// a protected walkthrough safe; a flag that was given, even empty, sets it.
+	password *string
+	allow    *[]string
 }
 
 // published is the note left beside a walkthrough after it goes out: which site
@@ -79,6 +84,24 @@ func cmdPublish(args []string) {
 			f.isNew = true
 		case a == "--force":
 			f.force = true
+		case a == "--password":
+			v := next()
+			f.password = &v
+		case strings.HasPrefix(a, "--password="):
+			v := strings.TrimPrefix(a, "--password=")
+			f.password = &v
+		case a == "--no-password":
+			v := ""
+			f.password = &v
+		case a == "--allow":
+			v := splitList(next())
+			f.allow = &v
+		case strings.HasPrefix(a, "--allow="):
+			v := splitList(strings.TrimPrefix(a, "--allow="))
+			f.allow = &v
+		case a == "--no-allow":
+			v := []string{}
+			f.allow = &v
 		case strings.HasPrefix(a, "-"):
 			die("unknown flag %q", a)
 		default:
@@ -92,6 +115,18 @@ func cmdPublish(args []string) {
 		die("give a walkthrough file")
 	}
 	f.site = strings.TrimRight(f.site, "/")
+	// A password on a command line ends up in shell history, so the
+	// environment is the better way in and is read when no flag was given.
+	if f.password == nil {
+		if v, set := os.LookupEnv("CW_PASSWORD"); set {
+			f.password = &v
+		}
+	}
+	if f.allow != nil && len(*f.allow) > 0 {
+		if _, err := parseNets(*f.allow); err != nil {
+			die("%v", err)
+		}
+	}
 
 	res, err := LoadDoc(f.file, mustSchema())
 	if err != nil {
@@ -129,6 +164,17 @@ func cmdPublish(args []string) {
 	if err != nil {
 		die("%v", err)
 	}
+	// Anything about who may read it travels in an envelope around the
+	// document, because it is about this copy on this site and not about the
+	// walkthrough itself.
+	if f.password != nil || f.allow != nil || f.slug != "" {
+		body, err = json.Marshal(envelope{
+			Slug: f.slug, Walkthrough: body, Password: f.password, Allow: f.allow,
+		})
+		if err != nil {
+			die("%v", err)
+		}
+	}
 
 	target, method, slug := f.resolveTarget()
 	key := ""
@@ -156,6 +202,20 @@ func cmdPublish(args []string) {
 	}
 	if c := commitOf(d); c != "" {
 		fmt.Printf("  against commit %s\n", short(c))
+	}
+	if f.password != nil {
+		if *f.password == "" {
+			fmt.Printf("  no password on it any more\n")
+		} else {
+			fmt.Printf("  password set, and readers will be asked for it\n")
+		}
+	}
+	if f.allow != nil {
+		if len(*f.allow) == 0 {
+			fmt.Printf("  readable from anywhere again\n")
+		} else {
+			fmt.Printf("  readable only from %s\n", strings.Join(*f.allow, ", "))
+		}
 	}
 	if out.Key != "" {
 		path, _ := editKeyPath()
@@ -404,4 +464,15 @@ func short(sha string) string {
 		return sha[:7]
 	}
 	return sha
+}
+
+// splitList takes a comma separated flag value and gives back its parts.
+func splitList(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

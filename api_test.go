@@ -345,3 +345,10 @@ func TestUnknownWalkthrough(t *testing.T) {
 		}
 	}
 }
+
+func mustJSON(t *testing.T, rec *httptest.ResponseRecorder, into any) {
+	t.Helper()
+	if err := json.Unmarshal(rec.Body.Bytes(), into); err != nil {
+		t.Fatalf("the answer was not JSON: %v", err)
+	}
+}
