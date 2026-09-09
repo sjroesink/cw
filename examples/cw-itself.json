@@ -128,7 +128,7 @@
               "code": {
                 "file": "main.go",
                 "from": 580,
-                "text": "// caller is turned away before anything is read or opened.\nfunc (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}",
+                "text": "So the page asks for them by a stamp of what is in this build. A build that\nchanges a file changes the URL, which makes caching them hard the right thing\nrather than a trap.\n*/\n\nvar assetStamp = sync.OnceValue(func() string {\n\tsum := sha256.New()\n\tsub, err := fs.Sub(webFS, \"web\")\n\tif err != nil {\n\t\treturn \"0\"\n\t}\n\t_ = fs.WalkDir(sub, \".\", func(path string, d fs.DirEntry, err error) error {\n\t\tif err != nil || d.IsDir() {",
                 "hi": [
                   582,
                   586

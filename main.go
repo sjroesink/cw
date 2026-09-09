@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	_ "embed"
 	"encoding/hex"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -505,7 +507,7 @@ func runServe(f flags) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
-	mux.Handle("/assets/", http.StripPrefix("/assets/", s.assets()))
+	mux.Handle("/assets/", cacheAssets(http.StripPrefix("/assets/", s.assets()), s.dev))
 	mux.HandleFunc(vendorPrefix, s.vendor.Handler())
 	mux.HandleFunc("/schema.json", s.handleSchema)
 	mux.HandleFunc("/api/walkthrough", s.guard(s.handleWalkthrough))
@@ -568,6 +570,65 @@ func randomToken() string {
 	return hex.EncodeToString(b)
 }
 
+/*
+The page itself is served with no-store, but its stylesheet and its script were
+not: they sit at a fixed path, so anything that cached them yesterday keeps
+handing them out after a deploy. On cw.roesink.dev that is Cloudflare holding
+app.js for four hours by default, which is four hours of a fresh page running
+last week's code, and the two disagreeing in ways nobody can reproduce.
+
+So the page asks for them by a stamp of what is in this build. A build that
+changes a file changes the URL, which makes caching them hard the right thing
+rather than a trap.
+*/
+
+var assetStamp = sync.OnceValue(func() string {
+	sum := sha256.New()
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		return "0"
+	}
+	_ = fs.WalkDir(sub, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		body, err := fs.ReadFile(sub, path)
+		if err != nil {
+			return nil
+		}
+		fmt.Fprintf(sum, "%s:%d:", path, len(body))
+		sum.Write(body)
+		return nil
+	})
+	return hex.EncodeToString(sum.Sum(nil))[:12]
+})
+
+// stampAssets points the page at the stamped URLs. In dev the files come off
+// disk and change while the server runs, so there the stamp changes per load.
+func stampAssets(body string, dev bool) string {
+	v := assetStamp()
+	if dev {
+		v = strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	for _, path := range []string{"/assets/app.css", "/assets/app.js", "/vendor/fonts.css"} {
+		body = strings.ReplaceAll(body, `"`+path+`"`, `"`+path+"?v="+v+`"`)
+	}
+	return body
+}
+
+// cacheAssets is what the stamp buys. Without one the answer is no-cache,
+// because a URL that does not change must not be kept.
+func cacheAssets(next http.Handler, dev bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dev || r.URL.Query().Get("v") == "" {
+			w.Header().Set("Cache-Control", "no-cache")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *server) assets() http.Handler {
 	if s.dev {
 		return http.FileServer(http.Dir("web"))
@@ -608,7 +669,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "index.html is missing from this build", http.StatusInternalServerError)
 		return
 	}
-	body := strings.ReplaceAll(string(raw), "__CW_TOKEN__", s.token)
+	body := stampAssets(strings.ReplaceAll(string(raw), "__CW_TOKEN__", s.token), s.dev)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(body))

@@ -146,7 +146,7 @@ func (h *hostServer) routes() http.Handler {
 
 	mux.HandleFunc("GET /{$}", h.handleLanding)
 	mux.HandleFunc("GET /w/{slug}", h.handlePage)
-	mux.Handle("GET /assets/", http.StripPrefix("/assets/", h.assets()))
+	mux.Handle("GET /assets/", cacheAssets(http.StripPrefix("/assets/", h.assets()), h.dev))
 	mux.HandleFunc(vendorPrefix, h.vendor.Handler())
 
 	mux.HandleFunc("GET /schema.json", h.handleSchema)
@@ -214,8 +214,8 @@ func (h *hostServer) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "index.html is missing from this build", http.StatusInternalServerError)
 		return
 	}
-	body := strings.ReplaceAll(string(raw), `window.CW = { token: "__CW_TOKEN__" };`,
-		fmt.Sprintf(`window.CW = { hosted: true, slug: %q, source: "/api/v1/walkthroughs/%s" };`, slug, slug))
+	body := stampAssets(strings.ReplaceAll(string(raw), `window.CW = { token: "__CW_TOKEN__" };`,
+		fmt.Sprintf(`window.CW = { hosted: true, slug: %q, source: "/api/v1/walkthroughs/%s" };`, slug, slug)), h.dev)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(body))
