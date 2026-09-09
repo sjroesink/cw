@@ -11,6 +11,7 @@ Run from the repository root:
     python examples/rebuild.py && cw check examples/cw-itself.json
 """
 
+import io
 import json
 import pathlib
 import sys
@@ -278,7 +279,10 @@ def strip_nones(value):
 
 
 def main():
-    OUT.write_text(json.dumps(strip_nones(WALKTHROUGH), indent=2) + "\n", encoding="utf-8")
+    # newline="" keeps the line endings LF on Windows too, because .gitattributes
+    # says the file is LF and git should not have to normalise it every time.
+    with io.open(OUT, "w", encoding="utf-8", newline="") as f:
+        f.write(json.dumps(strip_nones(WALKTHROUGH), indent=2) + "\n")
     steps = sum(len(sec["steps"]) for part in WALKTHROUGH["parts"] for sec in part["sections"])
     print(f"{OUT.relative_to(ROOT)}: {len(WALKTHROUGH['parts'])} parts, {steps} steps")
 
