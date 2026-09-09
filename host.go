@@ -132,7 +132,7 @@ func (h *hostServer) routes() http.Handler {
 	mux.HandleFunc("GET /skill.md", h.text(func() string { return SkillDoc(h.base) }))
 	mux.HandleFunc("GET /format", h.text(FormatDoc))
 
-	mux.HandleFunc("GET /api/v1/walkthroughs", h.guarded(h.handleList))
+	mux.HandleFunc("GET /api/v1/walkthroughs", h.handleList)
 	mux.HandleFunc("POST /api/v1/walkthroughs", h.guarded(h.handleCreate))
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}", h.handleGet)
 	mux.HandleFunc("GET /api/v1/walkthroughs/{slug}/state", h.handleState)

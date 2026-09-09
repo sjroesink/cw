@@ -209,7 +209,6 @@ func TestWritingNeedsAKeyAndReadingDoesNot(t *testing.T) {
 		{"PUT", "/api/v1/walkthroughs/r-pr-7"},
 		{"DELETE", "/api/v1/walkthroughs/r-pr-7"},
 		{"POST", "/api/v1/validate"},
-		{"GET", "/api/v1/walkthroughs"},
 	} {
 		if rec, _ := do(t, h, c.method, c.path, "", goodDoc); rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s without a key returned %d, want 401", c.method, c.path, rec.Code)
@@ -219,8 +218,11 @@ func TestWritingNeedsAKeyAndReadingDoesNot(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/api/v1/walkthroughs/r-pr-7", "/api/v1/walkthroughs/r-pr-7/state",
-		"/schema/v1.json", "/llms.txt", "/skill.md", "/format", "/w/r-pr-7", "/"} {
+	// Reading is open all the way down, including the index: the landing page
+	// shows it to anyone anyway, and every walkthrough on it is readable by URL.
+	for _, path := range []string{"/api/v1/walkthroughs", "/api/v1/walkthroughs/r-pr-7",
+		"/api/v1/walkthroughs/r-pr-7/state", "/schema/v1.json", "/llms.txt", "/skill.md",
+		"/format", "/w/r-pr-7", "/"} {
 		if rec, _ := do(t, h, "GET", path, "", ""); rec.Code != http.StatusOK {
 			t.Errorf("GET %s without a key returned %d, want 200", path, rec.Code)
 		}

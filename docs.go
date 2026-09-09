@@ -60,8 +60,8 @@ works through at their own pace, with the code, a diagram and a diff next to the
 Read __BASE__/skill.md first. It is the whole job in one page: how to write a walkthrough,
 every field of the format, and the API to publish it. Do not work from this file alone.
 
-Publishing needs an API key, sent as the header: Authorization: Bearer cw_...
-Reading needs nothing.
+Publishing and updating need an API key, sent as the header: Authorization: Bearer cw_...
+Reading a walkthrough, and listing what is published, need nothing.
 
     GET  __BASE__/skill.md                     what to write and how to publish it
     GET  __BASE__/schema/v1.json               the JSON schema, for validating while you write

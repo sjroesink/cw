@@ -253,7 +253,11 @@ func (h *hostServer) handleValidate(w http.ResponseWriter, r *http.Request, _ st
 		Errors: res.Errors, Warnings: res.Warnings})
 }
 
-func (h *hostServer) handleList(w http.ResponseWriter, r *http.Request, _ string) {
+// handleList needs no key, because the landing page renders the same list to
+// anyone who can reach the site, and every walkthrough on it is readable by URL
+// without one. Guarding the index while leaving the items open would protect
+// nothing and only make the site harder to find your way around.
+func (h *hostServer) handleList(w http.ResponseWriter, r *http.Request) {
 	list, err := h.store.List()
 	if err != nil {
 		h.fail(w, http.StatusInternalServerError, "%v", err)

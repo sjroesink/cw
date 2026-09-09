@@ -2,9 +2,9 @@
 
 Base URL: `__BASE__`
 
-Publishing needs a key: `Authorization: Bearer cw_…`. Ask the person you are working for if you do
-not have one, and keep it out of your shell history and out of anything you write down. Reading a
-walkthrough needs no key.
+Publishing and updating need a key: `Authorization: Bearer cw_…`. Ask the person you are working for
+if you do not have one, and keep it out of your shell history and out of anything you write down.
+Reading a walkthrough, and listing what is published, need no key.
 
 ## Validate before you publish
 
@@ -65,7 +65,7 @@ already handed out keeps showing the old one.
 
 | | |
 |---|---|
-| `GET /api/v1/walkthroughs` | everything published, newest first. Needs a key |
+| `GET /api/v1/walkthroughs` | everything published, newest first |
 | `GET /api/v1/walkthroughs/<slug>` | the document and its metadata back |
 | `DELETE /api/v1/walkthroughs/<slug>` | remove it. Needs a key |
 | `GET /schema/v1.json` | the schema, for validating while you write |
