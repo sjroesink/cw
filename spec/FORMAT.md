@@ -76,6 +76,7 @@ A snippet that has a place in a file says so in full:
 | `from` | the first line, in the file's own numbering |
 | `to` | the last line |
 | `sha` | sha256 over the text, CRLF folded to LF, trailing newlines removed |
+| `check` | what the publisher's tree said about it when it was published |
 
 A consumer with the repository in front of it should prefer the file over the paste, and `sha` is
 how it decides. Hash the lines `from` to `to` the same way and compare:
@@ -85,6 +86,12 @@ how it decides. Hash the lines `from` to `to` the same way and compare:
   it moved, so renumber and say so. Not found, it is gone, so show the paste and mark it as history.
 - **no `sha`**: the document was written by hand and never published through a tool that fills them
   in. Show the paste.
+
+`check` is the same question answered once, by the publisher, at the moment they published:
+`ok`, `moved`, `gone`, `missing-file`, `outside-root` or `unchecked`. It is provenance rather than
+content. A consumer holding the repository ignores it and works the answer out for itself; one
+without a checkout can at least tell the reader that a snippet was already out of date when it was
+written down. Never treat it as current: it is a statement about a moment that has passed.
 
 A snippet without `from` is a shape, an example or a config fragment rather than a location. Do not
 try to resolve it.

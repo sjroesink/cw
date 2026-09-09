@@ -74,6 +74,33 @@ func (v *Vendor) Prewarm() {
 	}()
 }
 
+// Warm is Prewarm with the failures shown and the caller made to wait. It is
+// what a container build runs, so that the image ships with the assets and the
+// running container never needs to reach the network at all.
+func (v *Vendor) Warm() ([]string, error) {
+	var got []string
+	if _, err := v.mermaid(); err != nil {
+		return got, fmt.Errorf("mermaid: %w", err)
+	}
+	got = append(got, "mermaid")
+	if _, err := v.hljs(); err != nil {
+		return got, fmt.Errorf("the highlighter: %w", err)
+	}
+	got = append(got, "highlighter")
+	css, err := v.fontCSS()
+	if err != nil {
+		return got, fmt.Errorf("the font stylesheet: %w", err)
+	}
+	got = append(got, "font css")
+	for _, hash := range fontHashes(css) {
+		if _, err := v.font(hash); err != nil {
+			return got, fmt.Errorf("a font file: %w", err)
+		}
+		got = append(got, "font "+hash[:8])
+	}
+	return got, nil
+}
+
 func (v *Vendor) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, vendorPrefix)
@@ -129,6 +156,7 @@ func (v *Vendor) hljs() ([]byte, error) {
 }
 
 var gstaticRe = regexp.MustCompile(`https://fonts\.gstatic\.com/[^)'" ]+`)
+var localFontRe = regexp.MustCompile(regexp.QuoteMeta(vendorPrefix+"font/") + `([0-9a-f]+)\.woff2`)
 
 // fontCSS rewrites every font file URL onto this origin, so the browser never
 // talks to Google either.
@@ -169,10 +197,23 @@ func (v *Vendor) font(hash string) ([]byte, error) {
 	return v.cached("font-"+hash+".woff2", src, map[string]string{"User-Agent": fontUA})
 }
 
+// fontHashes reads the hashes out of the stylesheet as it leaves here, which is
+// the rewritten form: fontCSS has already replaced every gstatic URL with a path
+// on this origin. Looking for gstatic URLs in its output finds nothing, which is
+// why the fonts used to be fetched only when a browser first asked for them, and
+// an offline container had none.
 func fontHashes(css []byte) []string {
 	var out []string
-	for _, u := range gstaticRe.FindAll(css, -1) {
-		out = append(out, hashOf(string(u)))
+	seen := map[string]bool{}
+	// One font file serves several @font-face blocks, one per unicode range, so
+	// the same hash comes past many times.
+	for _, m := range localFontRe.FindAllSubmatch(css, -1) {
+		hash := string(m[1])
+		if seen[hash] {
+			continue
+		}
+		seen[hash] = true
+		out = append(out, hash)
 	}
 	return out
 }

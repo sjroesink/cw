@@ -230,7 +230,8 @@
           "type": "string",
           "minLength": 1,
           "description": "The lines to show. Short: this is a peek from a diagram, not the snippet panel."
-        }
+        },
+        "check": { "$ref": "#/$defs/check" }
       }
     },
 
@@ -268,7 +269,8 @@
           "type": "array",
           "description": "A marker on a line that opens a sentence. For what the code does not say on its own.",
           "items": { "$ref": "#/$defs/lineNote" }
-        }
+        },
+        "check": { "$ref": "#/$defs/check" }
       }
     },
 
@@ -354,6 +356,22 @@
           "enum": ["idle", "active", "done", "gone", "alert"],
           "description": "idle is waiting, active is happening now, done has happened, gone has been removed, alert is the failure this frame is about. Defaults to idle."
         }
+      }
+    },
+
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "description": "What the publisher's working tree said about this snippet when the walkthrough was published. It is provenance, not content: a consumer with the repository in front of it works the same thing out for itself from sha, and one without it can at least say whether the paste was already out of date when it was written down.",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["ok", "moved", "gone", "missing-file", "outside-root", "unchecked"],
+          "description": "ok means the lines were where the snippet says they are. moved means they were found elsewhere in the file, which is not the same as changed. gone means they were not in the file at all. unchecked means there was no working tree to compare against."
+        },
+        "line": { "$ref": "#/$defs/line", "description": "Where the lines actually started, when that is not where from says." },
+        "note": { "type": "string" }
       }
     },
 

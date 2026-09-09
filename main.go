@@ -32,7 +32,11 @@ const usageText = `cw: serve a code walkthrough as a page you can step through.
   cw schema [--write]                   print the JSON schema, or write a copy to point at
   cw ides                               list the editors found on this machine
   cw settings [--path]                  print the settings file
-  cw cache clear                        drop the cached mermaid and typefaces
+  cw cache warm | clear                 fetch the mermaid and typeface bundle, or drop it
+
+Sharing one:
+  cw publish <walkthrough.json> [--site URL] [--slug NAME] [--new] [--force]
+  cw open <url or name> [--root DIR]    read a published one with the local buttons
 
 Serving the site rather than one file:
   cw host [--addr :8080] [--data DIR] [--base-url URL]
@@ -62,6 +66,10 @@ func main() {
 		cmdHost(os.Args[2:])
 	case "keys":
 		cmdKeys(os.Args[2:])
+	case "publish":
+		cmdPublish(os.Args[2:])
+	case "open":
+		cmdOpen(os.Args[2:])
 	case "schema":
 		cmdSchema(os.Args[2:])
 	case "ides":
@@ -386,15 +394,31 @@ func cmdSettings(args []string) {
 }
 
 func cmdCache(args []string) {
-	if len(args) == 0 || args[0] != "clear" {
-		die("the only cache command is: cw cache clear")
+	if len(args) == 0 {
+		die("the cache commands are: cw cache warm, cw cache clear")
 	}
 	v := NewVendor(false)
-	n, err := v.Clear()
-	if err != nil {
-		die("%v", err)
+	switch args[0] {
+	case "clear":
+		n, err := v.Clear()
+		if err != nil {
+			die("%v", err)
+		}
+		fmt.Printf("removed %d file(s) from %s\n", n, v.Dir)
+	case "warm":
+		// What a container build runs, so the image ships with the assets and
+		// the running container never has to reach the network.
+		got, err := v.Warm()
+		for _, name := range got {
+			fmt.Printf("  %s\n", name)
+		}
+		if err != nil {
+			die("%v", err)
+		}
+		fmt.Printf("%d file(s) cached in %s\n", len(got), v.Dir)
+	default:
+		die("the cache commands are: cw cache warm, cw cache clear")
 	}
-	fmt.Printf("removed %d file(s) from %s\n", n, v.Dir)
 }
 
 // ---------------------------------------------------------------- serve
@@ -432,7 +456,12 @@ type payload struct {
 }
 
 func cmdServe(args []string) {
-	f := parseFlags(args, true)
+	runServe(parseFlags(args, true))
+}
+
+// runServe is the local reader, split out from the command so cw open can point
+// it at a walkthrough it just fetched instead of one on disk.
+func runServe(f flags) {
 	abs, err := filepath.Abs(f.file)
 	if err != nil {
 		die("%v", err)

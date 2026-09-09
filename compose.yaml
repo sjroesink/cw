@@ -1,0 +1,25 @@
+services:
+  cw:
+    build: .
+    image: cw
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # The walkthroughs and the API keys. This is the only thing worth backing
+      # up, and it is plain JSON, so a backup is readable without this binary.
+      - cw-data:/data
+    environment:
+      CW_ADDR: ":8080"
+      CW_DATA: /data
+      # The address readers will use. It goes into the URL that comes back from
+      # a publish and into the instructions the site hands an agent, so getting
+      # it wrong hands people links to a host they cannot reach.
+      CW_BASE_URL: ${CW_BASE_URL:-http://127.0.0.1:8080}
+      # A key to start with, so a fresh volume is usable without a shell inside
+      # the container. Stored as a hash on first start, and only once. Leave it
+      # out and add keys with: docker compose exec cw /cw keys add <name>
+      CW_BOOTSTRAP_KEY: ${CW_BOOTSTRAP_KEY:-}
+
+volumes:
+  cw-data:
