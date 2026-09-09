@@ -144,6 +144,10 @@ full local page back with `cw open <url> --root .`.
 That difference is why the tree check happens at publishing time. A stale snippet stops
 the publish, and `--force` puts it on the page in as many words instead of hiding it.
 
+Two sibling skills. `open-walkthrough` reads a published one on this machine, and
+`migrate-walkthrough` lifts a `cw/1` walkthrough to `cw/2`, which is worth doing when one
+is about to be edited anyway.
+
 ## What the site tells an agent that has none of this
 
 `https://cw.roesink.dev` serves its own instructions at `/skill.md`, assembled from
