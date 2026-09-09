@@ -18,10 +18,15 @@ COPY --from=build /out/cw /usr/local/bin/cw
 # runtime image as it is.
 ENV XDG_CACHE_HOME=/vendor
 RUN apk add --no-cache ca-certificates && cw cache warm
+# distroless has no shell, so the data directory has to be made here. Docker
+# copies this directory and its ownership into a fresh named volume, which is
+# what lets the container run as nonroot and still write to it.
+RUN mkdir -p /data && chown 65532:65532 /data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/cw /cw
 COPY --from=assets --chown=nonroot:nonroot /vendor /vendor
+COPY --from=assets --chown=nonroot:nonroot /data /data
 
 ENV XDG_CACHE_HOME=/vendor \
     CW_DATA=/data \
