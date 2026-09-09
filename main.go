@@ -323,7 +323,29 @@ func report(indent, what, state, note string) {
 // in. It never touches an id that is already there, because a reader's saved
 // progress is keyed on them.
 func cmdMigrate(args []string) {
-	f := parseFlags(args, true)
+	to, opt, rest := FormatV1, LiftOptions{}, []string{}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--to":
+			if i+1 >= len(args) {
+				die("--to needs a version, and the only one worth migrating to is %s", FormatV2)
+			}
+			i++
+			to = args[i]
+		case strings.HasPrefix(a, "--to="):
+			to = strings.TrimPrefix(a, "--to=")
+		case a == "--assume-diff-start":
+			opt.AssumeDiffStart = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+	if to != FormatV1 && to != FormatV2 {
+		die("this build migrates to %s and %s, not to %q", FormatV1, FormatV2, to)
+	}
+
+	f := parseFlags(rest, true)
 	res, err := LoadDoc(f.file)
 	if err != nil {
 		die("%v", err)
@@ -335,20 +357,43 @@ func cmdMigrate(args []string) {
 		}
 		os.Exit(1)
 	}
+
 	ids, anchors := 0, 0
-	var out any = res.Doc
-	if res.Doc2 != nil {
+	var todo []string
+	var out any
+
+	switch {
+	case to == FormatV2 && res.Doc != nil:
+		lifted, gaps := LiftToV2(res.Doc, opt)
+		anchors, todo, out = EnsureAnchors2(lifted), gaps, lifted
+	case res.Doc2 != nil:
 		// cw/2 requires ids in the file, so there are never any to fill in: the
 		// schema refused the document before it got here.
 		anchors, out = EnsureAnchors2(res.Doc2), res.Doc2
-	} else {
-		ids, anchors = EnsureIDs(res.Doc), EnsureAnchors(res.Doc)
+	default:
+		ids, anchors, out = EnsureIDs(res.Doc), EnsureAnchors(res.Doc), res.Doc
 	}
+
 	if err := WriteDoc(f.file, out); err != nil {
 		die("%v", err)
 	}
-	fmt.Printf("%s is now %s\n", f.file, res.View().Format)
+	if to == FormatV2 && res.Doc != nil {
+		fmt.Printf("%s is now %s\n", f.file, FormatV2)
+	} else {
+		fmt.Printf("%s is now %s\n", f.file, res.View().Format)
+	}
 	fmt.Printf("  %d id(s) filled in, %d snippet anchor(s) filled in\n", ids, anchors)
+
+	// The list is the point of the command. Everything above it is what could be
+	// worked out; everything below it is what somebody has to decide, and it was
+	// left out rather than guessed at.
+	if len(todo) > 0 {
+		fmt.Printf("\n%d thing(s) this could not work out on its own:\n", len(todo))
+		for i, t := range todo {
+			fmt.Printf("  %d. %s\n", i+1, t)
+		}
+		fmt.Printf("\nRun cw check on it to see which of them the schema refuses.\n")
+	}
 }
 
 // WriteDoc writes a walkthrough back over itself, indented the way a hand-edited

@@ -129,7 +129,7 @@
               "code": {
                 "file": "main.go",
                 "from": 623,
-                "text": "So the page asks for them by a stamp of what is in this build. A build that\nchanges a file changes the URL, which makes caching them hard the right thing\nrather than a trap.\n*/\n\nvar assetStamp = sync.OnceValue(func() string {\n\tsum := sha256.New()\n\tsub, err := fs.Sub(webFS, \"web\")\n\tif err != nil {\n\t\treturn \"0\"\n\t}\n\t_ = fs.WalkDir(sub, \".\", func(path string, d fs.DirEntry, err error) error {\n\t\tif err != nil || d.IsDir() {",
+                "text": "\t\tfmt.Printf(\"\\n%d warning(s):\\n\", len(res.Warnings))\n\t\tfor _, w := range res.Warnings {\n\t\t\tfmt.Printf(\"  - %s\\n\", w)\n\t\t}\n\t}\n\tfmt.Printf(\"\\nctrl-c to stop\\n\")\n\n\tif settings.OpenBrowser && !f.noOpen {\n\t\tgo func() {\n\t\t\ttime.Sleep(180 * time.Millisecond)\n\t\t\t_ = openURL(url)\n\t\t}()\n\t}",
                 "hi": [
                   625,
                   629
