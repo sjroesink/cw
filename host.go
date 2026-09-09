@@ -149,8 +149,9 @@ func (h *hostServer) routes() http.Handler {
 	mux.Handle("GET /assets/", cacheAssets(http.StripPrefix("/assets/", h.assets()), h.dev))
 	mux.HandleFunc(vendorPrefix, h.vendor.Handler())
 
-	mux.HandleFunc("GET /schema.json", h.handleSchema)
-	mux.HandleFunc("GET /schema/v1.json", h.handleSchema)
+	mux.HandleFunc("GET /schema.json", schemaHandler(FormatDefault))
+	mux.HandleFunc("GET /schema/v1.json", schemaHandler(FormatV1))
+	mux.HandleFunc("GET /schema/v2.json", schemaHandler(FormatV2))
 	mux.HandleFunc("GET /llms.txt", h.text(func() string { return LLMsTxt(h.base) }))
 	mux.HandleFunc("GET /skill.md", h.text(func() string { return SkillDoc(h.base) }))
 	mux.HandleFunc("GET /format", h.text(FormatDoc))
@@ -175,12 +176,6 @@ func (h *hostServer) assets() http.Handler {
 		return http.FileServer(http.Dir("web"))
 	}
 	return http.FileServer(http.FS(h.web))
-}
-
-func (h *hostServer) handleSchema(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	_, _ = w.Write(schemaJSON)
 }
 
 // text serves one of the documents an agent reads. They are plain text on

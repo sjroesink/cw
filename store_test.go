@@ -18,7 +18,7 @@ func testStore(t *testing.T) *Store {
 
 func sampleDoc(title string) *Doc {
 	return &Doc{
-		Version: FormatVersion, Title: title,
+		Version: FormatV1, Title: title,
 		Parts: []Part{{Title: "One", Sections: []Section{{Title: "Two",
 			Steps: []Step{{Title: "Three", Body: "Four"}}}}}},
 	}

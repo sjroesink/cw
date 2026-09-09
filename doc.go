@@ -28,8 +28,14 @@ type Doc struct {
 	Ext      map[string]any `json:"ext,omitempty"`
 }
 
-// FormatVersion is the only version this build reads and writes.
-const FormatVersion = "cw/1"
+// The two versions of the format this build reads. A document says which one
+// it is, and that is the only thing that decides how it is read and rendered.
+// FormatDefault is what a new walkthrough is written as.
+const (
+	FormatV1      = "cw/1"
+	FormatV2      = "cw/2"
+	FormatDefault = FormatV2
+)
 
 // Source is where the walkthrough came from, in a form something other than a
 // human can act on. It is what turns a path plus a line number into a link.

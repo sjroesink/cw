@@ -287,7 +287,8 @@ func TestOnlyChangingNeedsAKey(t *testing.T) {
 	// Reading is open all the way down, including the index: the landing page
 	// shows it to anyone anyway, and every walkthrough on it is readable by URL.
 	for _, path := range []string{"/api/v1/walkthroughs", "/api/v1/walkthroughs/r-pr-7",
-		"/api/v1/walkthroughs/r-pr-7/state", "/schema/v1.json", "/llms.txt", "/skill.md",
+		"/api/v1/walkthroughs/r-pr-7/state", "/schema.json", "/schema/v1.json", "/schema/v2.json",
+		"/llms.txt", "/skill.md",
 		"/format", "/w/r-pr-7", "/"} {
 		if rec, _ := do(t, h, "GET", path, "", ""); rec.Code != http.StatusOK {
 			t.Errorf("GET %s without a key returned %d, want 200", path, rec.Code)

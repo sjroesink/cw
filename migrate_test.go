@@ -27,8 +27,8 @@ func TestLegacyFilesStillLoad(t *testing.T) {
 	if len(res.Errors) > 0 {
 		t.Fatalf("an older file came back with errors: %v", res.Errors)
 	}
-	if res.Doc.Version != FormatVersion {
-		t.Errorf("version is %q after loading, want %q", res.Doc.Version, FormatVersion)
+	if res.Doc.Version != FormatV1 {
+		t.Errorf("version is %q after loading, want %q", res.Doc.Version, FormatV1)
 	}
 	if res.Doc.Source == nil {
 		t.Fatal("the header fields did not become a source block")
@@ -68,7 +68,7 @@ func TestMigrationIsIdempotent(t *testing.T) {
 }
 
 func TestEnsureIDsLeavesExistingOnesAlone(t *testing.T) {
-	d := &Doc{Version: FormatVersion, Title: "x", Parts: []Part{
+	d := &Doc{Version: FormatV1, Title: "x", Parts: []Part{
 		{ID: "kept", Title: "Some part", Sections: []Section{
 			{Title: "A section", Steps: []Step{
 				{Title: "The same title"}, {Title: "The same title"}}}}},
@@ -112,7 +112,7 @@ func TestSlug(t *testing.T) {
 }
 
 func TestEnsureAnchorsAndTheChecksOnThem(t *testing.T) {
-	d := &Doc{Version: FormatVersion, Title: "x", Parts: []Part{{Title: "p",
+	d := &Doc{Version: FormatV1, Title: "x", Parts: []Part{{Title: "p",
 		Sections: []Section{{Title: "s", Steps: []Step{
 			{Title: "t", Body: "b", Code: &Code{File: "a.go", From: 10, Text: "one\ntwo\nthree"}},
 			// No from, so it is a shape rather than a place in a file: it gets

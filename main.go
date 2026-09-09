@@ -24,7 +24,10 @@ import (
 var webFS embed.FS
 
 //go:embed schema/walkthrough.schema.json
-var schemaJSON []byte
+var schemaV1JSON []byte
+
+//go:embed schema/walkthrough.v2.schema.json
+var schemaV2JSON []byte
 
 const usageText = `cw: serve a code walkthrough as a page you can step through.
 
@@ -152,13 +155,35 @@ func die(format string, a ...any) {
 	os.Exit(2)
 }
 
-func mustSchema() *schemaDoc {
-	sch, err := loadSchema(schemaJSON)
-	if err != nil {
-		die("%v", err)
+// Both versions of the format are contracts in their own right, and they are
+// read once because parsing a schema per document would be the same work over
+// and over. A schema that will not load is a broken build rather than a broken
+// walkthrough, so this dies rather than returning an error nobody can act on.
+var schemas = sync.OnceValue(func() map[string]*schemaDoc {
+	out := map[string]*schemaDoc{}
+	for version, raw := range map[string][]byte{FormatV1: schemaV1JSON, FormatV2: schemaV2JSON} {
+		sch, err := loadSchema(raw)
+		if err != nil {
+			die("%s: %v", version, err)
+		}
+		out[version] = sch
 	}
-	return sch
+	return out
+})
+
+// schemaFor picks the contract a document is read against. An unknown version
+// comes back nil, because that is one sentence to an author rather than two
+// hundred about fields that were never meant to be there.
+func schemaFor(version string) *schemaDoc { return schemas()[version] }
+
+func schemaBytes(version string) []byte {
+	if version == FormatV1 {
+		return schemaV1JSON
+	}
+	return schemaV2JSON
 }
+
+func mustSchema() *schemaDoc { return schemaFor(FormatV1) }
 
 // resolveRoot decides which checkout the paths hang off: what was asked for,
 // what the walkthrough says, or the repository the walkthrough sits in. An
@@ -323,7 +348,7 @@ func cmdMigrate(args []string) {
 	if err := WriteDoc(f.file, res.Doc); err != nil {
 		die("%v", err)
 	}
-	fmt.Printf("%s is now %s\n", f.file, FormatVersion)
+	fmt.Printf("%s is now %s\n", f.file, res.Doc.Version)
 	fmt.Printf("  %d id(s) filled in, %d snippet anchor(s) filled in\n", ids, anchors)
 }
 
@@ -342,22 +367,30 @@ func WriteDoc(path string, d *Doc) error {
 // The schema lives in the binary, so the honest answer to "where is it" is a
 // copy on disk the author can point their editor at.
 func cmdSchema(args []string) {
+	version := FormatDefault
+	if len(args) > 0 && args[0] == "--v1" {
+		version, args = FormatV1, args[1:]
+	}
 	if len(args) == 0 {
-		fmt.Print(string(schemaJSON))
+		fmt.Print(string(schemaBytes(version)))
 		return
 	}
 	if args[0] != "--write" {
-		die("the only schema flag is --write")
+		die("the schema flags are --v1 and --write")
 	}
 	sp, err := settingsPath()
 	if err != nil {
 		die("%v", err)
 	}
-	out := filepath.Join(filepath.Dir(sp), "walkthrough.schema.json")
+	name := "walkthrough.schema.json"
+	if version == FormatV1 {
+		name = "walkthrough.v1.schema.json"
+	}
+	out := filepath.Join(filepath.Dir(sp), name)
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		die("%v", err)
 	}
-	if err := os.WriteFile(out, schemaJSON, 0o644); err != nil {
+	if err := os.WriteFile(out, schemaBytes(version), 0o644); err != nil {
 		die("%v", err)
 	}
 	fmt.Println(out)
@@ -509,7 +542,9 @@ func runServe(f flags) {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.Handle("/assets/", cacheAssets(http.StripPrefix("/assets/", s.assets()), s.dev))
 	mux.HandleFunc(vendorPrefix, s.vendor.Handler())
-	mux.HandleFunc("/schema.json", s.handleSchema)
+	mux.HandleFunc("/schema.json", schemaHandler(FormatDefault))
+	mux.HandleFunc("/schema/v1.json", schemaHandler(FormatV1))
+	mux.HandleFunc("/schema/v2.json", schemaHandler(FormatV2))
 	mux.HandleFunc("/api/walkthrough", s.guard(s.handleWalkthrough))
 	mux.HandleFunc("/api/state", s.guard(s.handleState))
 	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
@@ -625,6 +660,13 @@ func cacheAssets(next http.Handler, dev bool) http.Handler {
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
 		}
+		// no-cache means revalidate, not do not cache, and revalidating needs
+		// something to revalidate against. An embedded file has no modification
+		// time, so without this the answer to every conditional request is the
+		// whole file again. The stamp is already the identity of this build.
+		if !dev {
+			w.Header().Set("Etag", `"`+assetStamp()+`"`)
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -675,9 +717,18 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(body))
 }
 
-func (s *server) handleSchema(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write(schemaJSON)
+// schemaHandler serves one version of the contract. /schema.json is whichever
+// version is current, which is what an editor points at when it wants to follow
+// along; the numbered URLs are what a document pins itself to and they never
+// move. Both servers answer the same three, because a walkthrough read locally
+// and the same one read on the site are the same file.
+func schemaHandler(version string) http.HandlerFunc {
+	body := schemaBytes(version)
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_, _ = w.Write(body)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

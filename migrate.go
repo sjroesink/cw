@@ -27,7 +27,7 @@ func migrateLegacy(obj map[string]any) bool {
 	if _, ok := obj["version"]; ok {
 		return false
 	}
-	obj["version"] = FormatVersion
+	obj["version"] = FormatV1
 
 	src, _ := obj["source"].(map[string]any)
 	if src == nil {

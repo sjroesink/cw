@@ -1,0 +1,748 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cw.roesink.dev/schema/v2.json",
+  "title": "Code walkthrough (cw/2)",
+  "description": "A portable explanation of a code change or subsystem, containing ordered narrative and embedded examples.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "title", "parts"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "version": {
+      "const": "cw/2"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/markdown"
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/part" }
+    },
+    "ext": {
+      "$ref": "#/$defs/ext"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$(?![\\s\\S])"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*$(?![\\s\\S])"
+    },
+    "ext": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/namespace"
+      },
+      "additionalProperties": true
+    },
+    "markdown": {
+      "type": "string",
+      "minLength": 1,
+      "description": "CommonMark text. Raw HTML is treated as text."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\/:\\u0000-\\u001f\\u007f]+(?:/[^\\\\/:\\u0000-\\u001f\\u007f]+)*$(?![\\s\\S])",
+      "description": "Portable repository-relative path with forward slashes. Local readers must also enforce containment after resolving symlinks."
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$(?![\\s\\S])",
+      "description": "Version-control revision. Prefer a complete immutable identifier. Branches, tags and abbreviated IDs do not guarantee permanent references."
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start"],
+      "properties": {
+        "start": { "$ref": "#/$defs/positiveInteger" },
+        "end": { "$ref": "#/$defs/positiveInteger" }
+      },
+      "description": "Inclusive range. Missing end means start. Semantic validation must enforce end >= start."
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseRevision", "headRevision"],
+      "properties": {
+        "baseRevision": { "$ref": "#/$defs/revision" },
+        "headRevision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "fileChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "status"],
+      "properties": {
+        "file": { "$ref": "#/$defs/path" },
+        "previousFile": { "$ref": "#/$defs/path" },
+        "status": {
+          "type": "string",
+          "enum": [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "copied",
+            "type-changed",
+            "other"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": { "enum": ["renamed", "copied"] }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["previousFile"]
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repositoryUrl": { "$ref": "#/$defs/url" },
+        "url": { "$ref": "#/$defs/url" },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": { "$ref": "#/$defs/revision" },
+        "comparison": { "$ref": "#/$defs/comparison" },
+        "changedFiles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fileChange" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "$ref": "#/$defs/path" },
+        "repositoryUrl": { "$ref": "#/$defs/url" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "startLine": { "$ref": "#/$defs/positiveInteger" },
+        "endLine": { "$ref": "#/$defs/positiveInteger" },
+        "url": { "$ref": "#/$defs/url" }
+      },
+      "dependentRequired": {
+        "endLine": ["startLine"]
+      }
+    },
+    "contentHash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+        }
+      },
+      "description": "SHA-256 of UTF-8 snippet text after CRLF-to-LF normalization. Preserve all other characters, including trailing newlines."
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "checkedAt", "against"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "match",
+            "moved",
+            "different",
+            "missing-file",
+            "unavailable"
+          ]
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "against": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "revision"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["revision", "working-tree"]
+            },
+            "revision": { "$ref": "#/$defs/revision" },
+            "dirty": { "type": "boolean" }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": { "const": "working-tree" }
+                },
+                "required": ["kind"]
+              },
+              "then": {
+                "required": ["dirty"]
+              },
+              "else": {
+                "not": { "required": ["dirty"] }
+              }
+            }
+          ]
+        },
+        "resolvedSource": { "$ref": "#/$defs/location" },
+        "note": { "$ref": "#/$defs/markdown" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": { "const": "moved" }
+            },
+            "required": ["state"]
+          },
+          "then": {
+            "required": ["resolvedSource"],
+            "properties": {
+              "resolvedSource": {
+                "required": ["startLine"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "highlight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines"],
+      "properties": {
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "kind": {
+          "type": "string",
+          "enum": ["focus", "added"],
+          "default": "focus"
+        }
+      },
+      "description": "Always uses 1-based snippet-relative lines."
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "text"],
+      "properties": {
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "text": { "$ref": "#/$defs/markdown" }
+      },
+      "description": "An explanation attached to a snippet-relative range."
+    },
+    "snippet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": { "$ref": "#/$defs/location" },
+        "hash": { "$ref": "#/$defs/contentHash" },
+        "highlights": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/highlight" }
+        },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/annotation" }
+        },
+        "verification": { "$ref": "#/$defs/verification" }
+      },
+      "dependentRequired": {
+        "verification": ["source"]
+      },
+      "description": "Embedded code with an optional origin. Source ranges identify contiguous verbatim excerpts after CRLF normalization. Omit source for pseudocode or modified examples."
+    },
+    "markdownBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "markdown" },
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "$ref": "#/$defs/markdown" },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "codeBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "snippet"],
+      "properties": {
+        "type": { "const": "code" },
+        "id": { "$ref": "#/$defs/id" },
+        "snippet": { "$ref": "#/$defs/snippet" },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "calloutBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "callout" },
+        "id": { "$ref": "#/$defs/id" },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "tip", "warning", "danger"],
+          "default": "info"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": { "$ref": "#/$defs/markdown" },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "diagramLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "blockId"],
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blockId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "diagramBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "format", "text", "alt"],
+      "properties": {
+        "type": { "const": "diagram" },
+        "id": { "$ref": "#/$defs/id" },
+        "format": { "const": "mermaid" },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caption": { "$ref": "#/$defs/markdown" },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diagramLink" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "diffLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["context", "add", "delete"]
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^[^\\r\\n]*$(?![\\s\\S])"
+        },
+        "noNewlineAtEnd": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "diffHunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oldStart",
+        "oldLines",
+        "newStart",
+        "newLines",
+        "lines"
+      ],
+      "properties": {
+        "oldStart": { "type": "integer", "minimum": 0 },
+        "oldLines": { "type": "integer", "minimum": 0 },
+        "newStart": { "type": "integer", "minimum": 0 },
+        "newLines": { "type": "integer", "minimum": 0 },
+        "heading": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/diffLine" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "oldLines": { "minimum": 1 }
+            },
+            "required": ["oldLines"]
+          },
+          "then": {
+            "properties": {
+              "oldStart": { "minimum": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "newLines": { "minimum": 1 }
+            },
+            "required": ["newLines"]
+          },
+          "then": {
+            "properties": {
+              "newStart": { "minimum": 1 }
+            }
+          }
+        }
+      ],
+      "description": "Unified-diff coordinates. Nonempty ranges start at a 1-based line. For an empty range, start is the number of lines before the boundary."
+    },
+    "diffBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "hunks"],
+      "properties": {
+        "type": { "const": "diff" },
+        "id": { "$ref": "#/$defs/id" },
+        "before": { "$ref": "#/$defs/location" },
+        "after": { "$ref": "#/$defs/location" },
+        "language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caption": { "$ref": "#/$defs/markdown" },
+        "hunks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diffHunk" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      },
+      "anyOf": [
+        { "required": ["before"] },
+        { "required": ["after"] }
+      ],
+      "allOf": [
+        {
+          "properties": {
+            "before": {
+              "not": {
+                "anyOf": [
+                  { "required": ["startLine"] },
+                  { "required": ["endLine"] }
+                ]
+              }
+            },
+            "after": {
+              "not": {
+                "anyOf": [
+                  { "required": ["startLine"] },
+                  { "required": ["endLine"] }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": { "required": ["before"] }
+          },
+          "then": {
+            "properties": {
+              "hunks": {
+                "minItems": 1,
+                "items": {
+                  "properties": {
+                    "oldStart": { "const": 0 },
+                    "oldLines": { "const": 0 },
+                    "lines": {
+                      "items": {
+                        "properties": {
+                          "kind": { "const": "add" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": { "required": ["after"] }
+          },
+          "then": {
+            "properties": {
+              "hunks": {
+                "minItems": 1,
+                "items": {
+                  "properties": {
+                    "newStart": { "const": 0 },
+                    "newLines": { "const": 0 },
+                    "lines": {
+                      "items": {
+                        "properties": {
+                          "kind": { "const": "delete" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Omit before for a new file and after for a deleted file. Locations have no line ranges; hunks provide coordinates. Empty hunks convey metadata only."
+    },
+    "timelineNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "nodeState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "state"],
+      "properties": {
+        "nodeId": { "$ref": "#/$defs/id" },
+        "state": {
+          "type": "string",
+          "enum": ["idle", "active", "done", "gone", "alert"]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "timelineFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "states"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": { "$ref": "#/$defs/markdown" },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nodeState" }
+        }
+      },
+      "description": "Complete snapshot with exactly one state per defined node. durationMs is an optional playback hint."
+    },
+    "timelineBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "nodes", "frames"],
+      "properties": {
+        "type": { "const": "timeline" },
+        "id": { "$ref": "#/$defs/id" },
+        "caption": { "$ref": "#/$defs/markdown" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/timelineNode" }
+        },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/timelineFrame" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "extensionBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name", "version", "data", "fallback"],
+      "properties": {
+        "type": { "const": "extension" },
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/namespace" },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "fallback": { "$ref": "#/$defs/markdown" },
+        "ext": { "$ref": "#/$defs/ext" }
+      },
+      "description": "Custom declarative content. Readers that do not support both name and version render fallback."
+    },
+    "block": {
+      "oneOf": [
+        { "$ref": "#/$defs/markdownBlock" },
+        { "$ref": "#/$defs/codeBlock" },
+        { "$ref": "#/$defs/calloutBlock" },
+        { "$ref": "#/$defs/diagramBlock" },
+        { "$ref": "#/$defs/diffBlock" },
+        { "$ref": "#/$defs/timelineBlock" },
+        { "$ref": "#/$defs/extensionBlock" }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "blocks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "speech": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "steps"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": { "$ref": "#/$defs/markdown" },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "sections"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": { "$ref": "#/$defs/markdown" },
+        "description": { "$ref": "#/$defs/markdown" },
+        "files": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/section" }
+        },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    }
+  }
+}

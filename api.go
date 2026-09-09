@@ -205,7 +205,7 @@ func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, slug 
 // save is the last stretch both publishing paths share: fill in what a
 // publisher should not have to type, work out what was verified, write it.
 func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time, fresh bool, env envelope) {
-	d.Version = FormatVersion
+	d.Version = FormatV1
 	d.Schema = strings.TrimRight(h.base, "/") + "/schema/v1.json"
 	EnsureIDs(d)
 	EnsureAnchors(d)
