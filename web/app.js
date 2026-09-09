@@ -63,6 +63,102 @@ function el(tag, cls, text) {
   return n;
 }
 
+/*
+Prose about code is written with backticks around the identifiers, and a
+walkthrough is mostly prose about code. Printed as text those backticks land on
+the screen, so the prose fields are read as a small inline subset of markdown:
+code spans, bold, italic, links. Nothing block-level, because a body is one
+paragraph and the check already says so when it is not.
+
+It builds nodes rather than a string of HTML. The hosted site serves every
+walkthrough from one origin, so a document that reached innerHTML would be a way
+into everyone else's page, including the cookie that unlocked it. Nothing here
+concatenates markup and nothing here should start.
+*/
+
+// mdInline turns one run of prose into nodes.
+function mdInline(text) {
+  const frag = document.createDocumentFragment();
+  let buf = "";
+  const flush = () => {
+    if (buf) frag.appendChild(document.createTextNode(buf));
+    buf = "";
+  };
+  const wrap = (tag, inner) => {
+    flush();
+    const n = el(tag);
+    n.appendChild(mdInline(inner));
+    frag.appendChild(n);
+  };
+  // A delimiter has to stand against something that is not a word character, so
+  // snake_case_names and 3 * 4 come out the way they were written.
+  const edge = (i) => i < 0 || i >= text.length || !/\w/.test(text[i]);
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "\\" && i + 1 < text.length && "`*_[\\".includes(text[i + 1])) {
+      buf += text[++i];
+      continue;
+    }
+    // Code first, and it does not nest: a backtick run is taken as written,
+    // which is the whole point of putting one around a name.
+    if (c === "`") {
+      const end = text.indexOf("`", i + 1);
+      if (end > i + 1) {
+        flush();
+        frag.appendChild(el("code", "md", text.slice(i + 1, end)));
+        i = end;
+        continue;
+      }
+    }
+    if (c === "*" && text[i + 1] === "*") {
+      const end = text.indexOf("**", i + 2);
+      if (end > i + 2) {
+        wrap("strong", text.slice(i + 2, end));
+        i = end + 1;
+        continue;
+      }
+    }
+    if ((c === "*" || c === "_") && edge(i - 1) && text[i + 1] !== " ") {
+      const end = text.indexOf(c, i + 1);
+      if (end > i + 1 && text[end - 1] !== " " && edge(end + 1)) {
+        wrap("em", text.slice(i + 1, end));
+        i = end;
+        continue;
+      }
+    }
+    if (c === "[") {
+      const m = /^\[([^\]\n]+)\]\(([^)\s]+)\)/.exec(text.slice(i));
+      if (m && safeHref(m[2])) {
+        flush();
+        const a = el("a", null, m[1]);
+        a.href = m[2];
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        frag.appendChild(a);
+        i += m[0].length - 1;
+        continue;
+      }
+    }
+    buf += c;
+  }
+  flush();
+  return frag;
+}
+
+// safeHref keeps javascript: and data: out of a link somebody else wrote. A
+// link that does not pass stays the text it was.
+function safeHref(url) {
+  return /^(https?:\/\/|mailto:|#|\/)/i.test(url);
+}
+
+// mdEl is el() for the fields that hold prose rather than a name.
+function mdEl(tag, cls, text) {
+  const n = el(tag, cls);
+  n.appendChild(mdInline(String(text)));
+  return n;
+}
+
 function pad2(n) { return String(n).padStart(2, "0"); }
 function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
 
@@ -611,7 +707,7 @@ function viewOverview() {
   const d = doc();
   const v = el("div", "view");
   v.appendChild(el("div", "eyebrow", "This walkthrough has " + plural(parts().length, "part")));
-  if (d.summary) v.appendChild(el("p", "lede", d.summary));
+  if (d.summary) v.appendChild(mdEl("p", "lede", d.summary));
 
   const grid = el("div", "cards");
   parts().forEach((p, pi) => {
@@ -623,7 +719,7 @@ function viewOverview() {
       plural(p.sections.length, "section") + " · " + plural(stepsIn(p), "step")));
     card.appendChild(head);
     card.appendChild(el("div", "title", p.title));
-    if (p.desc) card.appendChild(el("div", "desc", p.desc));
+    if (p.desc) card.appendChild(mdEl("div", "desc", p.desc));
     if (p.files && p.files.length) {
       const chips = el("div", "chips");
       for (const f of p.files) chips.appendChild(el("span", "chip", f));
@@ -661,7 +757,7 @@ function viewPart() {
     { text: "part " + pad2(state.part + 1) },
   ]));
   v.appendChild(el("h2", "part-title", p.title));
-  if (p.long || p.desc) v.appendChild(el("p", "part-long", p.long || p.desc));
+  if (p.long || p.desc) v.appendChild(mdEl("p", "part-long", p.long || p.desc));
 
   const list = el("div", "sections");
   p.sections.forEach((s, si) => {
@@ -670,7 +766,7 @@ function viewPart() {
     row.appendChild(el("span", "no", pad2(si + 1)));
     const mid = el("span", "mid");
     mid.appendChild(el("span", "t", s.title));
-    if (s.desc) mid.appendChild(el("span", "d", s.desc));
+    if (s.desc) mid.appendChild(mdEl("span", "d", s.desc));
     row.appendChild(mid);
     row.appendChild(el("span", "counts", plural(s.steps.length, "step")));
     row.appendChild(el("span", "arrow", "→"));
@@ -707,7 +803,7 @@ function viewStep() {
   v.appendChild(dots);
 
   v.appendChild(el("h2", "step-title", step.title));
-  v.appendChild(el("p", "step-body", step.body));
+  v.appendChild(mdEl("p", "step-body", step.body));
 
   if (step.diagram) v.appendChild(panelDiagram(step.diagram));
   if (step.anim) v.appendChild(panelAnim(step.anim));
@@ -716,7 +812,7 @@ function viewStep() {
   if (step.callout) {
     const c = el("div", "callout");
     c.appendChild(el("span", "label", "Watch out"));
-    c.appendChild(el("span", "txt", step.callout));
+    c.appendChild(mdEl("span", "txt", step.callout));
     v.appendChild(c);
   }
 
@@ -822,7 +918,7 @@ function refPanel(ref) {
   });
   box.appendChild(lines);
   highlightInto(lines, ref.code, ref.file);
-  if (ref.note) box.appendChild(el("div", "note", ref.note));
+  if (ref.note) box.appendChild(mdEl("div", "note", ref.note));
   return box;
 }
 
@@ -892,7 +988,7 @@ function panelCode(code) {
   if (openNote) {
     const np = el("div", "linenote");
     np.appendChild(el("span", "at", "line " + openNote.line));
-    np.appendChild(el("span", "txt", openNote.text));
+    np.appendChild(mdEl("span", "txt", openNote.text));
     const x = el("button", "x", "×");
     x.type = "button";
     x.addEventListener("click", () => go({ note: null }));
@@ -976,7 +1072,8 @@ function panelAnim(anim) {
   box._paint = () => {
     const f = anim.frames[state.frame % anim.frames.length];
     label.textContent = f.label;
-    note.textContent = f.note || "";
+    note.textContent = "";
+    note.appendChild(mdInline(f.note || ""));
     f.nodes.forEach((n, i) => {
       let node = nodes.children[i];
       if (!node) {

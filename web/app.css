@@ -640,3 +640,18 @@ a.open-link {
   white-space: nowrap;
 }
 .verified.stale { color: var(--warn-label); border-color: var(--warn-label); }
+
+/* A name inside a sentence. Quieter than a code panel, which is a thing to
+   read, where this is a thing to recognise mid-sentence. */
+code.md {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* On a tinted panel the page's own line colour disappears, so these take a
+   neutral that reads on both the warning wash and the dark note. */
+.callout code.md, .linenote code.md { background: oklch(50% 0 0 / 0.16); color: inherit; }

@@ -26,6 +26,12 @@ The promise for `cw/1`:
 
 Anything that breaks one of those gets a new version string, and both versions are served.
 
+`cw/1` widened once, in September 2026: the prose fields went from plain text to the small inline
+Markdown subset under **Text**. No document changed, none became invalid, and a consumer that keeps
+printing the source shows the same characters it showed before, because prose about code was already
+written with backticks around the names. That is the bar for widening inside a version rather than
+minting a new one.
+
 ## The shape
 
 ```
@@ -59,6 +65,11 @@ shows only one thing per step shows `body`.
 **Prefer `speech` when you are heard rather than read.** It is the same step written for an ear,
 present only when the written form leans on what is on screen. Absent, fall back to `body` rather
 than skipping the step.
+
+**Prose is a small Markdown subset, and never HTML.** See **Text**. Rendering the source exactly as
+it stands is conformant, and plainer is not wrong. Rendering it as HTML is not conformant: the
+document was written by somebody else, and `<img src=x onerror=...>` in a body is characters an
+author typed.
 
 **Treat `ext` as someone else's.** It is the one open object in the schema. Read the key you put
 there, ignore the rest, and never make a reader's ability to follow the walkthrough depend on it.
@@ -132,9 +143,27 @@ publish, and a document that has been published has them.
 
 ## Text
 
-Plain text, not Markdown, not HTML. A consumer renders it as it is and escapes it for whatever it is
-rendering into. Line breaks in `body` are the author's, and `\n` in `diagram.def` and `code.text` is
-a real newline.
+The prose fields hold a small inline subset of Markdown, and that subset is the whole list:
+
+| | |
+|---|---|
+| `` `code` `` | a name from the codebase, mid-sentence |
+| `**bold**` | |
+| `*italic*`, `_italic_` | `_` only against a non-word character, so `snake_case` is left alone |
+| `[text](url)` | `http`, `https`, `mailto`, or a path |
+| `\`` `\*` `\_` `\[` `\\` | the character itself |
+
+Nothing block-level. No headings, no lists, no images, no HTML. These fields are one paragraph of
+prose about code, and the format has real blocks for everything they are prose about.
+
+The fields are `summary`, a part's `desc` and `long`, a section's `desc`, a step's `body` and
+`callout`, `code.notes[].text`, `diagram.refs[].note` and `anim.frames[].note`. A title is not one of
+them and holds none of it: titles end up in menus, breadcrumbs and tooltips, where markup is noise.
+
+A consumer may do less. Printing the source as it stands is conformant. What a consumer must not do
+is treat the text as HTML, and a consumer that builds nodes rather than a string never can.
+
+Line breaks in `body` are the author's, and `\n` in `diagram.def` and `code.text` is a real newline.
 
 The prose is written in English even for a Dutch team, so the same walkthrough travels. Domain nouns
 from the codebase stay exactly as they are in the code.

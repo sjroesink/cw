@@ -28,7 +28,7 @@
     "summary": {
       "type": "string",
       "minLength": 1,
-      "description": "The paragraph on the overview, above the cards. What the change does and why, in a few sentences."
+      "description": "The paragraph on the overview, above the cards. What the change does and why, in a few sentences. Inline markdown: `code`, **bold**, *italic*, [links](url)."
     },
     "root": {
       "type": "string",
@@ -119,11 +119,11 @@
         },
         "desc": {
           "type": "string",
-          "description": "One line on the card, under the title."
+          "description": "One line on the card, under the title. Inline markdown: `code`, **bold**, *italic*, [links](url)."
         },
         "long": {
           "type": "string",
-          "description": "The paragraph on the part page itself, where there is room for the why."
+          "description": "The paragraph on the part page itself, where there is room for the why. Inline markdown: `code`, **bold**, *italic*, [links](url)."
         },
         "files": {
           "type": "array",
@@ -147,7 +147,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "type": "string", "minLength": 1 },
-        "desc": { "type": "string", "description": "One line on the row, under the title." },
+        "desc": { "type": "string", "description": "One line on the row, under the title. Inline markdown: `code`, **bold**, *italic*, [links](url)." },
         "steps": {
           "type": "array",
           "minItems": 1,
@@ -169,7 +169,7 @@
         "body": {
           "type": "string",
           "minLength": 1,
-          "description": "The explanation, for someone who reads code. Two or three sentences on what happens and why it is done this way."
+          "description": "The explanation, for someone who reads code. Two or three sentences on what happens and why it is done this way. Inline markdown: `code`, **bold**, *italic*, [links](url)."
         },
         "speech": {
           "type": "string",
@@ -177,7 +177,7 @@
         },
         "callout": {
           "type": "string",
-          "description": "The warn block under the step. For the thing that will bite the next person, not for emphasis."
+          "description": "The warn block under the step. For the thing that will bite the next person, not for emphasis. Inline markdown: `code`, **bold**, *italic*, [links](url)."
         },
         "diagram": { "$ref": "#/$defs/diagram" },
         "code": { "$ref": "#/$defs/code" },
@@ -225,7 +225,7 @@
         "from": { "$ref": "#/$defs/line" },
         "to": { "$ref": "#/$defs/line" },
         "sha": { "$ref": "#/$defs/sha256" },
-        "note": { "type": "string", "description": "Why this block is worth opening, in one sentence." },
+        "note": { "type": "string", "description": "Why this block is worth opening, in one sentence. Inline markdown: `code`, **bold**, *italic*, [links](url)." },
         "code": {
           "type": "string",
           "minLength": 1,
@@ -334,7 +334,7 @@
       "required": ["label", "nodes"],
       "properties": {
         "label": { "type": "string", "minLength": 1, "description": "Where on the clock this frame is.", "examples": ["t0 + 24h", "attempt 3"] },
-        "note": { "type": "string", "description": "What changed since the frame before." },
+        "note": { "type": "string", "description": "What changed since the frame before. Inline markdown: `code`, **bold**, *italic*, [links](url)." },
         "nodes": {
           "type": "array",
           "minItems": 1,

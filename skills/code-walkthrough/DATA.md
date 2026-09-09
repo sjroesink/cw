@@ -46,6 +46,16 @@ that stays right after the branch moves on. Without either, a snippet has nowher
 writing `kind`, `provider`, `repo`, `number` and `url` by hand is enough. Publishing straight at the
 API fills in nothing: write them yourself, or the page loses its links.
 
+## Prose, and the markdown in it
+
+The fields that hold sentences (`summary`, `desc`, `long`, `body`, `callout`, a line note, a ref
+note, a frame note) render a small inline subset of markdown: `` `code` ``, `**bold**`, `*italic*`
+and `[text](url)`. Backticks around a name from the codebase are the one worth using; the others are
+there so a sentence that needs them is not stuck.
+
+Nothing block-level, so no lists and no headings inside a body. A body that wants a list wants to be
+two steps. Titles take no markdown at all, because they also appear in the rail and in tooltips.
+
 ## Parts, sections, steps
 
 Three levels, and each one is a screen the reader lands on.

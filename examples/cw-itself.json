@@ -265,7 +265,7 @@
               "code": {
                 "file": "web/app.js",
                 "from": 1022,
-                "text": "function githubHref(file, line, to) {\n  const g = state.data.github;\n  if (!g) return null;\n  if (g.prFiles && g.anchors && g.anchors[file]) {\n    return g.prFiles + \"#\" + g.anchors[file] + \"R\" + (line || 1);\n  }\n  if (g.blobBase) {\n    const at = \"#L\" + (line || 1) + (to && to > line ? \"-L\" + to : \"\");\n    return g.blobBase + file + at;\n  }\n  return g.prFiles || null;\n}",
+                "text": "\n  const text = (list) => list.map((l) => l.t).join(\"\\n\");\n  if (!state.split) {\n    const body = el(\"div\", \"diff-body\");\n    for (const l of diff.lines) body.appendChild(rowFor(l));\n    wrap.appendChild(body);\n    highlightInto(body, text(diff.lines), diff.file);\n  } else {\n    const grid = el(\"div\", \"diff-split\");\n    for (const [label, keep] of [[\"before\", \"add\"], [\"after\", \"del\"]]) {\n      const col = el(\"div\");\n      col.appendChild(el(\"div\", \"side\", label));",
                 "lang": "javascript",
                 "hi": [
                   1025,
