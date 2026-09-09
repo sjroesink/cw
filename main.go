@@ -656,7 +656,10 @@ func stampAssets(body string, dev bool) string {
 	for _, path := range []string{"/assets/app.css", "/assets/app.js", "/vendor/fonts.css"} {
 		body = strings.ReplaceAll(body, `"`+path+`"`, `"`+path+"?v="+v+`"`)
 	}
-	return body
+	// app.js imports the renderer for the version it is looking at, and that
+	// import happens in the browser rather than here, so the stamp has to reach
+	// it as a value rather than as a rewritten URL.
+	return strings.ReplaceAll(body, "__CW_STAMP__", v)
 }
 
 // cacheAssets is what the stamp buys. Without one the answer is no-cache,

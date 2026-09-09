@@ -209,8 +209,8 @@ func (h *hostServer) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "index.html is missing from this build", http.StatusInternalServerError)
 		return
 	}
-	body := stampAssets(strings.ReplaceAll(string(raw), `window.CW = { token: "__CW_TOKEN__" };`,
-		fmt.Sprintf(`window.CW = { hosted: true, slug: %q, source: "/api/v1/walkthroughs/%s" };`, slug, slug)), h.dev)
+	body := stampAssets(strings.ReplaceAll(string(raw), `window.CW = { token: "__CW_TOKEN__", stamp: "__CW_STAMP__" };`,
+		fmt.Sprintf(`window.CW = { hosted: true, slug: %q, source: "/api/v1/walkthroughs/%s", stamp: "__CW_STAMP__" };`, slug, slug)), h.dev)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(body))

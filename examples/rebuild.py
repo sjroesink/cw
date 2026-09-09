@@ -260,7 +260,7 @@ WALKTHROUGH = {
                                 "anchors. So the page does no hashing, makes no request, and the same function "
                                 "in the same file serves both the local button and the hosted one."
                             ),
-                            "code": code("web/app.js", 1022, 1033, lang="javascript", hi=[1025, 1029]),
+                            "code": code("web/ui.js", 449, 471, lang="javascript", hi=[450, 465]),
                         },
                     ],
                 },
