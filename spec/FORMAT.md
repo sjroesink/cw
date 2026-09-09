@@ -1,4 +1,4 @@
-# cw/1: the code walkthrough format
+# cw/2: the code walkthrough format
 
 A walkthrough is one JSON document. It holds the whole content: the prose, the code, the diagrams
 and the order they are read in. A program that shows a walkthrough holds no topic of its own, which
@@ -8,162 +8,260 @@ This document is for someone writing a second reader. If you are writing a walkt
 `DATA.md` instead: it is the field reference, and it says what good content looks like rather than
 what is legal.
 
-The contract is `walkthrough.schema.json`, published at `https://cw.roesink.dev/schema/v1.json`. Where
-this text and the schema disagree, the schema is right.
+The contract is `walkthrough.v2.schema.json`, published at `https://cw.roesink.dev/schema/v2.json`.
+Where this text and the schema disagree, the schema is right. What the schema cannot say is in
+**Rules a schema cannot state**, and a reader may assume all of it.
 
 ## Versions
 
-Every document carries `"version": "cw/1"`. A consumer that does not recognise the version refuses
+Every document carries `"version": "cw/2"`. A consumer that does not recognise the version refuses
 the file. It does not guess, and it does not read the parts it happens to understand: a format it
 does not know may well have changed what a field it does recognise means.
 
-The promise for `cw/1`:
+`$schema` beside it is what an editor follows while an author types. It is not what a reader acts
+on: it can be a relative path, a stale URL, or absent. The version decides.
+
+The promise for `cw/2`:
 
 - No field is removed, and no field changes meaning.
 - New fields are optional, and a document without them stays valid.
 - New values may appear in an enum. A consumer treats a value it does not know the way it treats a
   block it cannot render: it falls back, it does not fail.
+- **No new block type.** The seven are the seven. Anything else goes in `extension`, which is the
+  one place the format has no opinion about and the one place a reader is told how to cope.
 
-Anything that breaks one of those gets a new version string, and both versions are served.
-
-`cw/1` widened once, in September 2026: the prose fields went from plain text to the small inline
-Markdown subset under **Text**. No document changed, none became invalid, and a consumer that keeps
-printing the source shows the same characters it showed before, because prose about code was already
-written with backticks around the names. That is the bar for widening inside a version rather than
-minting a new one.
+Anything that breaks one of those gets a new version string, and both versions are served. `cw/1` is
+still served, still read and still published: see `FORMAT-v1.md`.
 
 ## The shape
 
 ```
 walkthrough
-  version, title, source?, summary?, root?, language?, ext?
+  version, title, summary?, language?, source?, ext?
   parts[]                     one chapter, and one screen a reader lands on
-    id?, title, desc?, long?, files[]?, ext?
+    id, title, summary?, description?, files[]?, ext?
     sections[]                a run of steps about a single idea
-      id?, title, desc?, ext?
+      id, title, summary?, ext?
       steps[]                 one screen, one idea
-        id?, title, body, speech?, callout?, ext?
-        diagram?  code?  diff?  anim?
+        id, title, speech?, ext?
+        blocks[]              what the step is made of, in the order it is read
+          markdown | code | callout | diagram | diff | timeline | extension
 ```
 
 Three levels, and each one is somewhere a reader can be. Two to five steps in a section, two to four
 sections in a part, three to six parts. Those are the numbers the content is written to, not rules
 the schema enforces.
 
+`root` is gone. Which checkout the paths hang off is a fact about the machine reading the document,
+not about the document, so it belongs to the reader's own configuration.
+
+## The blocks
+
+A step is an ordered list. Two snippets with a paragraph between them is a sentence the format can
+say, which is the whole reason this version exists.
+
+| type | what it holds |
+|---|---|
+| `markdown` | `text`. Prose. See **Text** |
+| `code` | `snippet`, which is text plus an optional place it came from |
+| `callout` | `text`, `severity` (`info`, `tip`, `warning`, `danger`), an optional `title` |
+| `diagram` | `format` (`mermaid`), `text`, a required `alt`, an optional `caption` and `links[]` |
+| `diff` | `before`/`after` locations and `hunks[]` in unified-diff coordinates |
+| `timeline` | `nodes[]` and `frames[]`, each frame a complete picture |
+| `extension` | `name`, `version`, `data`, and a `fallback` a reader can print |
+
+**A type this document does not list is an invalid document, not an extension.** That is what makes
+`extension` worth having: a reader knows the whole vocabulary, and everything outside it arrives in
+a shape that says how to cope with not knowing it.
+
 ## Rendering: what is required of a consumer
 
 **Render what you understand, skip what you do not, and say nothing about it.** A reader that plays
-a walkthrough out loud has no use for `anim` and should not apologise for it. A reader that cannot
-draw mermaid shows `diagram.def` as text, which is still the thing being described.
+a walkthrough out loud has no use for `timeline` and should not apologise for it. A reader that
+cannot draw mermaid shows the diagram's `text` as text, which is still the thing being described,
+and its `alt` as the sentence it is.
 
-**Never invent an ordering.** Parts, sections and steps are read in array order. There is no
+**Never invent an ordering.** Parts, sections, steps and blocks are read in array order. There is no
 priority field and no dependency graph; if the order is wrong, the document is wrong.
 
-**`body` is the step.** `title`, `callout` and the four blocks are all around it. A consumer that
-shows only one thing per step shows `body`.
+**Render an extension's `fallback` when you do not support both its `name` and its `version`.** Not
+a placeholder, not a warning, not nothing: the sentence the author wrote for exactly this. An
+extension whose fallback does not stand on its own is a broken extension.
 
 **Prefer `speech` when you are heard rather than read.** It is the same step written for an ear,
-present only when the written form leans on what is on screen. Absent, fall back to `body` rather
-than skipping the step.
+present only when the written form leans on what is on screen. Absent, fall back to the step's
+markdown blocks rather than skipping the step.
 
-**Prose is a small Markdown subset, and never HTML.** See **Text**. Rendering the source exactly as
-it stands is conformant, and plainer is not wrong. Rendering it as HTML is not conformant: the
-document was written by somebody else, and `<img src=x onerror=...>` in a body is characters an
-author typed.
+**Treat `ext` as someone else's.** It is the one open object in the schema, its keys are namespaced
+(`owner/name`), and a reader ignores the ones it did not put there and keeps them when it writes the
+document back out. Never make a reader's ability to follow the walkthrough depend on one.
 
-**Treat `ext` as someone else's.** It is the one open object in the schema. Read the key you put
-there, ignore the rest, and never make a reader's ability to follow the walkthrough depend on it.
+## Text
+
+`markdown`, `callout.text`, an annotation, a caption, a summary, a description, a frame note and an
+extension's fallback all hold CommonMark. Raw HTML in them is text, not markup, and a reader that
+builds nodes rather than a string of HTML cannot get that wrong.
+
+A reader has to handle this much:
+
+| | |
+|---|---|
+| paragraphs | with a hard break on a line ending in two spaces or a backslash |
+| `` `code` ``, `**bold**`, `*italic*`, `[text](url)` | inline, and `\` escapes any of their markers |
+| ATX headings | `#` to `######`, mapped under whatever heading the step itself already has |
+| lists | ordered and unordered, one level of nesting |
+| fenced code | with an optional language |
+| blockquote and thematic break | |
+
+Anything else it shows as the characters that are there, which is conformant and is what the
+render-what-you-understand rule already allows. A reader may do more; none of them may do less.
+
+A title holds none of it. Titles end up in menus, breadcrumbs and tooltips, where markup is noise.
+
+The prose is written in English even for a Dutch team, so the same walkthrough travels. Domain nouns
+from the codebase stay exactly as they are in the code.
 
 ## Code, and how much to trust it
 
-`code.text` is a copy of the source, pasted at the time of writing. It is what makes a walkthrough
-readable without a checkout, and it is the part that rots.
+`snippet.text` is a copy of the source, pasted at the time of writing. It is what makes a
+walkthrough readable without a checkout, and it is the part that rots.
 
-A snippet that has a place in a file says so in full:
+**A snippet with a `source` is a claim that it is a verbatim excerpt.** Without one it is an
+illustration: pseudocode, a shape, a config fragment. Do not try to resolve it, and do not tell a
+reader it went stale, because it was never in a file to begin with. Use several snippets rather than
+one that stitches together lines that are not next to each other.
 
 | field | |
 |---|---|
-| `file` | repository-relative, forward slashes |
-| `from` | the first line, in the file's own numbering |
-| `to` | the last line |
-| `sha` | sha256 over the text, CRLF folded to LF, trailing newlines removed |
-| `check` | what the publisher's tree said about it when it was published |
+| `source.file` | repository-relative, forward slashes, no `.` or `..` segment |
+| `source.startLine`, `source.endLine` | the first and last line, in the file's own numbering |
+| `hash` | sha256 of the text, CRLF folded to LF, **trailing newline kept** |
+| `verification` | what a working tree said about it, when, and against what |
 
-A consumer with the repository in front of it should prefer the file over the paste, and `sha` is
-how it decides. Hash the lines `from` to `to` the same way and compare:
+**Line numbers inside a snippet are relative to the snippet.** A highlight or an annotation at line
+2 means the second line of the text, not line 2 of the file. The line in the file is
+`source.startLine + n - 1`, and a reader showing a gutter should show that, because it is the number
+somebody types into their editor. This is the one rule most likely to be got wrong on the way from
+`cw/1`, where those numbers were absolute.
 
-- **equal**: show the file, the paste and the file agree.
-- **different**: the code moved or changed. Look for the pasted text elsewhere in the file. Found,
-  it moved, so renumber and say so. Not found, it is gone, so show the paste and mark it as history.
-- **no `sha`**: the document was written by hand and never published through a tool that fills them
-  in. Show the paste.
+**Counting and hashing follow different rules, on purpose.** For counting, fold CRLF to LF and do
+not count a trailing newline as an extra empty line: three lines ending in a newline are three
+lines. For hashing, fold CRLF to LF and keep the trailing newline, so that a file which ends with
+one and a file which does not are not the same file. `cw/1` trimmed before hashing and lost that.
 
-`check` is the same question answered once, by the publisher, at the moment they published:
-`ok`, `moved`, `gone`, `missing-file`, `outside-root` or `unchecked`. It is provenance rather than
-content. A consumer holding the repository ignores it and works the answer out for itself; one
-without a checkout can at least tell the reader that a snippet was already out of date when it was
-written down. Never treat it as current: it is a statement about a moment that has passed.
+A consumer with the repository in front of it should prefer the file over the paste, and `hash` is
+how it decides. Hash `startLine` to `endLine` the same way and compare. Equal: show the file.
+Different: look for the pasted text elsewhere in the file, and say whether it moved or is gone.
 
-A snippet without `from` is a shape, an example or a config fragment rather than a location. Do not
-try to resolve it.
+`verification` is that same question answered once, by the publisher, at a moment that has passed.
+`match`, `moved`, `different`, `missing-file` or `unavailable`, with `checkedAt` and an `against`
+naming the revision. It is provenance rather than content: a consumer holding the repository works
+the answer out for itself, and one without a checkout can at least say that a snippet was already
+out of date when it was written down. **Absent means unchecked**, and a reader must not read that as
+a clean bill of health.
 
-`diff` is never verifiable: half of it is by definition no longer in the tree. Write the lines
-without their leading `+` or `-`; `kind` says which side they are on.
+`diff` is never verifiable: half of it is by definition no longer in the tree.
+
+## Diffs
+
+A hunk says how big it is twice, once in its counts and once in its lines, and both have to agree:
+`oldLines` is the number of `context` plus `delete` lines, `newLines` is `context` plus `add`. Hunks
+walk down a file, so each starts after the last one ended on both sides.
+
+`before` and `after` are locations without line ranges; the hunks carry the coordinates. Omit
+`before` for a new file and `after` for a deleted one, and then every line is an add or a delete
+respectively. Empty `hunks` is a real thing to say: a file that was renamed and not otherwise
+touched.
+
+`noNewlineAtEnd` is about the end of a file, so it can only be set on the last line of its side.
+
+## Timelines
+
+A frame is a complete snapshot: every node the timeline defines appears exactly once, and a node
+that is not doing anything is `idle` rather than absent. That is what lets a reader be dropped into
+the third frame without having drawn the first two, and it is why a frame that leaves a node out is
+a broken frame rather than an implied one.
+
+Node ids are local to their timeline. `durationMs` is a hint about one frame, not a speed for the
+whole run. Without animation, show the frames in order.
 
 ## Linking back to the source
 
-`source` is what turns a path and a line into a URL. `kind` says what is being explained,
-`provider` says who hosts it, and for a pull request `commit` and `changedFiles` are what make a
-precise link possible:
+`source` is what turns a path and a line into a URL. It says where things are in URLs and revisions
+rather than in one forge's shorthand, so a walkthrough about something that is not on GitHub is
+still saying something true.
 
-- The file is in `changedFiles`: link into the diff, so the reader sees the change and not only the
-  result.
-- Otherwise: link to the file at `commit`, which stays correct after the branch moves on.
-- No `commit`: link to `source.url` and stop there. Do not link to a branch tip and call it a
-  permalink.
+A location may name its own repository and revision. What it leaves out falls back:
 
-On GitHub the second is `…/blob/<commit>/<path>#L<from>-L<to>`, and the first is
+| field | falls back to |
+|---|---|
+| `location.repositoryUrl` | `source.repositoryUrl` |
+| a code snippet's revision | `source.revision`, then `source.comparison.headRevision` |
+| a diff's `before` revision | `source.comparison.baseRevision` |
+| a diff's `after` revision | `source.comparison.headRevision`, then `source.revision` |
+| language | the document's `language`, then plain text |
+
+**Naming a different repository turns revision inheritance off.** One walkthrough can then explain
+code from more than one repository without quietly resolving the second one at the first one's
+commit.
+
+With `changedFiles` and a pull request URL, a snippet of changed code links into the diff; with a
+revision, anything else links to a permalink that stays right after the branch moves on. On GitHub
+the second is `…/blob/<revision>/<path>#L<from>-L<to>`, and the first is
 `…/pull/<n>/files#diff-<sha256 of the path>R<line>`. That anchor is not documented by GitHub, so
 treat it as a convenience that may stop working, and keep the permalink as the fallback.
 
 ## Identity
 
-`id` on a part, a section or a step is a name that survives editing. Progress, bookmarks and deep
-links hang off it, so:
+`id` is required on a part, a section and a step, and on a block that anything points at. It is a
+name that survives editing, and progress, bookmarks and deep links hang off it.
 
-- An id is unique among its siblings, not across the document. A step id is addressed as
-  `part-id/section-id/step-id`.
-- A tool that fills in missing ids derives them from the title, and **never rewrites one that is
-  already there**. Changing an id loses every reader's place.
-- A consumer that stores progress stores ids. Storing indices means inserting one step silently
-  moves everybody.
+**One namespace for the whole document.** `cw/1` gave each level its own, which was enough while
+only steps were addressable. A diagram link names a block, and nothing in the name says what kind of
+thing it is pointing at, so all of them share one space.
 
-Ids are optional in the file because they are tedious to write by hand. They are filled in on
-publish, and a document that has been published has them.
+A step id is addressed as `part-id/section-id/step-id`. A tool that fills in a missing id derives it
+from the title and **never rewrites one that is already there**: changing an id loses every reader's
+place. A consumer that stores progress stores ids.
 
-## Text
+Timeline node ids are the exception. They are local to their timeline and do not enter the
+document's namespace, because they name a box in a picture rather than a thing anybody links to.
 
-The prose fields hold a small inline subset of Markdown, and that subset is the whole list:
+## Rules a schema cannot state
 
-| | |
+A reader may assume all of these, and a validator should check them:
+
+- ids are unique across parts, sections, steps and blocks together
+- `diagram.links[].blockId` names a block that exists, and it is a `code` block
+- a line range ends at or after it starts, and highlights and annotations fall inside their snippet
+- `source.endLine - source.startLine + 1` equals the number of lines in the text
+- `hash` matches the text
+- per hunk, `oldLines` is context plus delete and `newLines` is context plus add
+- hunks ascend and do not overlap, and `noNewlineAtEnd` is only on the last line of its side
+- every timeline frame holds every node of its timeline exactly once, and no others
+
+## Coming from cw/1
+
+Mechanically, for the most part:
+
+| cw/1 | cw/2 |
 |---|---|
-| `` `code` `` | a name from the codebase, mid-sentence |
-| `**bold**` | |
-| `*italic*`, `_italic_` | `_` only against a non-word character, so `snake_case` is left alone |
-| `[text](url)` | `http`, `https`, `mailto`, or a path |
-| `\`` `\*` `\_` `\[` `\\` | the character itself |
+| `step.body` | a `markdown` block |
+| `step.callout` | a `callout` with `severity: "warning"` |
+| `step.code` | a `code` block; `file`/`from`/`to` become `snippet.source` |
+| `code.hi`, `code.add` | `highlights` with `kind` `focus` and `added` |
+| `code.notes` | `annotations`, on a range rather than a line |
+| `desc`, `long` | `summary`, `description` |
+| `diagram.refs` | a `code` block each, plus `diagram.links` |
+| `anim` | a `timeline` with stable node ids |
+| `source.commit` | `source.revision` |
+| `root` | reader configuration, outside the document |
 
-Nothing block-level. No headings, no lists, no images, no HTML. These fields are one paragraph of
-prose about code, and the format has real blocks for everything they are prose about.
+Three things do not come across on their own, and a migrator must not invent them. Line numbers have
+to be made snippet-relative. Hashes have to be recomputed, because the rule changed. A `cw/1` diff
+has one starting number for both sides, and `cw/2` needs coordinates for each. Missing verification
+dates and revisions are not there to be guessed at either: leave the field out, and the next publish
+against a real working tree fills it in.
 
-The fields are `summary`, a part's `desc` and `long`, a section's `desc`, a step's `body` and
-`callout`, `code.notes[].text`, `diagram.refs[].note` and `anim.frames[].note`. A title is not one of
-them and holds none of it: titles end up in menus, breadcrumbs and tooltips, where markup is noise.
-
-A consumer may do less. Printing the source as it stands is conformant. What a consumer must not do
-is treat the text as HTML, and a consumer that builds nodes rather than a string never can.
-
-Line breaks in `body` are the author's, and `\n` in `diagram.def` and `code.text` is a real newline.
-
-The prose is written in English even for a Dutch team, so the same walkthrough travels. Domain nouns
-from the codebase stay exactly as they are in the code.
+`cw migrate --to cw/2` does the mechanical part and prints a numbered list of what it would have had
+to guess.

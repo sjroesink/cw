@@ -99,7 +99,8 @@ URL, and the link you already handed out keeps showing the old one.
 | `DELETE /api/v1/walkthroughs/<slug>` | remove it. Needs that walkthrough's key |
 | `POST /api/v1/walkthroughs/<slug>/unlock` | `{"password": "..."}`, and the reply sets a cookie for that one walkthrough |
 | `GET /api/v1/whoami` | the address you appear to be calling from |
-| `GET /schema/v1.json` | the schema, for validating while you write |
+| `GET /schema.json` | the schema, for validating while you write |
+| `GET /schema/v1.json` | the older version of it, for reading what is already published |
 | `GET /format` | the format specification, for writing a second reader |
 
 ## Failures

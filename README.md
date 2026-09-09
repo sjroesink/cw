@@ -20,7 +20,7 @@ cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
 cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an error
 cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
-cw migrate <walkthrough.json>              lift an older file to cw/1, fill in ids and anchors
+cw migrate <walkthrough.json> [--to cw/2]  fill in ids and anchors, or lift a cw/1 file
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine
 cw settings [--path]                       print the settings file
@@ -55,30 +55,36 @@ nothing is checked against a tree.
 
 ## The format
 
-One JSON file per topic, written against `schema/walkthrough.schema.json`. Point at it from the file
-and an editor validates while you type:
+One JSON file per topic, written against `schema/walkthrough.v2.schema.json`. Point at it from the
+file and an editor validates while you type:
 
 ```jsonc
 {
-  "$schema": "https://cw.roesink.dev/schema/v1.json",
-  "version": "cw/1",
+  "$schema": "https://cw.roesink.dev/schema/v2.json",
+  "version": "cw/2",
   "title": "feat: reliable webhook processing",
   "source": {
     "kind": "pull-request",
     "provider": "github",
-    "repo": "innovadis-dev/Fincent",
-    "number": "PR #4150",
+    "repositoryUrl": "https://github.com/innovadis-dev/Fincent",
+    "label": "PR #4150",
     "url": "https://github.com/innovadis-dev/Fincent/pull/4150",
-    "commit": "9f2c1ab…"
+    "revision": "9f2c1ab…"
   },
   "summary": "The paragraph on the overview, above the cards.",
-  "parts": [ /* parts hold sections, sections hold steps */ ]
+  "parts": [ /* parts hold sections, sections hold steps, steps hold blocks */ ]
 }
 ```
 
-`skill/DATA.md` is the field reference. The format is versioned so that something other than this
-page can read the same file, an editor plugin or a reader that plays it out loud, and the rule for
-any consumer is to render what it understands and skip the rest without complaining.
+A step is a list of blocks in the order they are read: prose, code, a callout, a diagram, a diff, a
+timeline, or an extension carrying its own fallback. `skills/code-walkthrough/DATA.md` is the field
+reference.
+
+The format is versioned so that something other than this page can read the same file, an editor
+plugin or a reader that plays it out loud. The rule for any consumer is to render what it
+understands and skip the rest without complaining, and to refuse a version it does not know rather
+than guess at which half of it still means what it used to. `cw/1` is still read, still published
+and documented in `spec/FORMAT-v1.md`.
 
 ## Verifying, and what that is worth
 

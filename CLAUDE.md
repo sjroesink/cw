@@ -37,8 +37,10 @@ schema uses and skips the rest rather than guessing.
 
 **The schema is the contract, and it runs twice.** An editor validates against
 `schema/walkthrough.schema.json` while an author types, and the same file, embedded, runs at load
-time. Adding a field means adding it in three places: the schema, the struct in `doc.go`, and
-`DATA.md`. `spec/FORMAT.md` too if a second consumer would need to know about it.
+time. There are two of each now, one per version: `schema/walkthrough.schema.json` with `doc.go`
+for `cw/1`, and `schema/walkthrough.v2.schema.json` with `doc2.go` for `cw/2`. Adding a field means
+the schema, the struct, and `DATA.md`, plus the matching `spec/FORMAT.md` if a second consumer would
+need to know about it.
 
 **`inspect()` in `doc.go` is where the real checks live.** Anything about content rather than shape:
 a highlighted line inside its snippet, an id unique among its siblings, an anchor matching the text
@@ -46,10 +48,19 @@ under it. New checks go there, and errors refuse while warnings do not.
 
 ## The format is versioned, and other people may read it
 
-`cw/1`. Adding an optional field is free; removing one, renaming one or changing what one means is
-not, and needs a new version string with both served. `spec/FORMAT.md` states that promise, so it is
-a promise. `ext` is the escape hatch for anything one consumer needs and the format has no opinion
-about.
+`cw/2` is what a new walkthrough is written as, and `cw/1` is still read, still published and still
+specified. Adding an optional field is free; removing one, renaming one or changing what one means
+is not, and needs a new version string with both served. `spec/FORMAT.md` states that promise, so it
+is a promise.
+
+For `cw/2` the promise goes further: **no new block type.** The seven are the seven, and anything
+else is an `extension`, which carries the fallback that makes a reader who does not know it still
+able to read the walkthrough. `ext` is the other open place, for what one consumer needs and the
+format has no opinion about.
+
+Which version a document is read as comes from `version` in the document and nothing else.
+`load.go` is that seam: it picks the schema, the struct and the checks, and the page picks its
+renderer the same way.
 
 ## Who may read what
 

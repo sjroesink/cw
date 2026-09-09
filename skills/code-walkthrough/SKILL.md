@@ -9,7 +9,7 @@ You turn a change into a page a reviewer can work through: an overview of what t
 is made of, and inside each part the sections and steps that explain it, with the code, a
 diagram, a diff or an animation next to the prose.
 
-**Your job is one file.** The rest exists: a format called `cw/1`, a reader that runs on
+**Your job is one file.** The rest exists: a format called `cw/2`, a reader that runs on
 your machine and one that runs as a site, and an API to publish to. None of them knows any
 topic. Adding a walkthrough is writing a document and nothing else.
 
@@ -50,11 +50,15 @@ a question. Both of those are answered faster by answering them.
    holds two to five steps. If a section has one step, it is a step. If it has nine, it is
    two sections.
 
-4. **Write the file.** Point `$schema` at `https://cw.roesink.dev/schema/v1.json` so your
-   editor validates while you type, and set `version` to `cw/1`. Fill in `source` with the
-   repository and the pull request URL: `cw publish` reads the commit and the changed
-   files out of it, and those are what make every snippet link back to the diff. Leave
-   `id`, `to` and `sha` out; they are filled in for you.
+4. **Write the file.** Point `$schema` at `https://cw.roesink.dev/schema/v2.json` so your
+   editor validates while you type, and set `version` to `cw/2`. Fill in `source` with the
+   repository URL and the pull request URL: `cw publish` reads the revision and the changed
+   files out of them, and those are what make every snippet link back to the diff.
+
+   A step is a list of `blocks` in the order they are read, so prose, a snippet, a sentence
+   about it and a second snippet is a step you can now write. Give every part, section and
+   step an `id` that will not change; leave `endLine` and `hash` out, they are filled in for
+   you. Line numbers inside a snippet count from the snippet, not from the file.
 
 5. **Check it until it is clean.**
    ```powershell
@@ -94,7 +98,7 @@ cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an err
 cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
            [--password PW | --no-password] [--allow CIDR,... | --no-allow]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
-cw migrate <walkthrough.json>              lift an older file to cw/1
+cw migrate <walkthrough.json> [--to cw/2]  fill in what can be worked out, or lift a cw/1 file
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine
 cw settings [--path]                       print the settings file

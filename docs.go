@@ -32,6 +32,9 @@ var dataMD string
 //go:embed spec/FORMAT.md
 var formatMD string
 
+//go:embed spec/FORMAT-v1.md
+var formatV1MD string
+
 // SkillDoc is the whole instruction set as one page. Four documents rather than
 // one file, because three of them are also read somewhere else and a copy would
 // drift.
@@ -46,6 +49,10 @@ func SkillDoc(base string) string {
 }
 
 func FormatDoc() string { return formatMD }
+
+// FormatV1Doc is the older specification. Documents written against it are still
+// published and still read, so the promise it makes is still a promise.
+func FormatV1Doc() string { return formatV1MD }
 
 // LLMsTxt is the front door for an agent: short enough to read in full before
 // deciding, and it points at exactly one next page.
@@ -66,8 +73,10 @@ Reading needs nothing, unless the walkthrough was published with a password or l
 a set of addresses, which the person asking for it can ask you to do.
 
     GET  __BASE__/skill.md                     what to write and how to publish it
-    GET  __BASE__/schema/v1.json               the JSON schema, for validating while you write
+    GET  __BASE__/schema.json                  the JSON schema, for validating while you write
     GET  __BASE__/format                       the format specification, for writing another reader
+    GET  __BASE__/schema/v1.json               the older version, for reading what is already out there
+    GET  __BASE__/format/v1                    and its specification
     POST __BASE__/api/v1/validate              check a document without storing it
     POST __BASE__/api/v1/walkthroughs          publish, and get the URL back
     PUT  __BASE__/api/v1/walkthroughs/<slug>   update in place, same URL

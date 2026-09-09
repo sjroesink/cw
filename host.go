@@ -155,6 +155,7 @@ func (h *hostServer) routes() http.Handler {
 	mux.HandleFunc("GET /llms.txt", h.text(func() string { return LLMsTxt(h.base) }))
 	mux.HandleFunc("GET /skill.md", h.text(func() string { return SkillDoc(h.base) }))
 	mux.HandleFunc("GET /format", h.text(FormatDoc))
+	mux.HandleFunc("GET /format/v1", h.text(FormatV1Doc))
 
 	// Reading and publishing are open. Changing something that is already there
 	// needs the key that came back when it was published.
