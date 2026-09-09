@@ -34,7 +34,7 @@ type GitHubLinks struct {
 
 // BuildGitHubLinks returns nil when there is nothing to link to, so the page can
 // treat "no links" as one case rather than as an empty object with empty fields.
-func BuildGitHubLinks(src *Source) *GitHubLinks {
+func BuildGitHubLinks(src *SourceView) *GitHubLinks {
 	if src == nil {
 		return nil
 	}

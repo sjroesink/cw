@@ -95,7 +95,7 @@ func (h *hostServer) owned(next func(http.ResponseWriter, *http.Request, string)
 // readDoc turns a request body into a validated walkthrough. It returns the
 // wanted name separately, because the name is about where the document is
 // published and not about what it says.
-func (h *hostServer) readDoc(r *http.Request) (*Doc, envelope, *LoadResult, error) {
+func (h *hostServer) readDoc(r *http.Request) (*Walkthrough, envelope, *LoadResult, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxBody))
 	if err != nil {
 		return nil, envelope{}, nil, fmt.Errorf("could not read the body, or it is over %d MB: %w", maxBody>>20, err)
@@ -114,11 +114,11 @@ func (h *hostServer) readDoc(r *http.Request) (*Doc, envelope, *LoadResult, erro
 		}
 	}
 
-	res, err := ParseDoc(body, "the posted walkthrough", h.schema)
+	res, err := ParseDoc(body, "the posted walkthrough")
 	if err != nil {
 		return nil, envelope{}, nil, err
 	}
-	return res.Doc, env, res, nil
+	return res.View(), env, res, nil
 }
 
 // applyPolicy sets the lock on a walkthrough. A field that was not sent leaves
@@ -204,11 +204,27 @@ func (h *hostServer) handleReplace(w http.ResponseWriter, r *http.Request, slug 
 
 // save is the last stretch both publishing paths share: fill in what a
 // publisher should not have to type, work out what was verified, write it.
-func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadResult, publisher string, created time.Time, fresh bool, env envelope) {
-	d.Version = FormatV1
-	d.Schema = strings.TrimRight(h.base, "/") + "/schema/v1.json"
-	EnsureIDs(d)
-	EnsureAnchors(d)
+func (h *hostServer) save(w http.ResponseWriter, slug string, view *Walkthrough, res *LoadResult, publisher string, created time.Time, fresh bool, env envelope) {
+	// The version stays whatever the document said it was. Stamping it would be
+	// the site deciding what somebody else's file is, and it already had to be
+	// right for the document to get this far. The $schema is pointed at this
+	// site's copy of that version, which is the one a reader can actually fetch.
+	base := strings.TrimRight(h.base, "/")
+	switch {
+	case view.V1 != nil:
+		view.V1.Schema = base + "/schema/v1.json"
+		EnsureIDs(view.V1)
+		EnsureAnchors(view.V1)
+	case view.V2 != nil:
+		view.V2.Schema = base + "/schema/v2.json"
+		EnsureAnchors2(view.V2)
+	}
+
+	doc, err := view.Raw()
+	if err != nil {
+		h.fail(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
 
 	now := time.Now().UTC()
 	if created.IsZero() {
@@ -221,15 +237,16 @@ func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadR
 		return
 	}
 	m := Meta{
-		Slug: slug, Title: d.Title, Summary: d.Summary, Steps: d.Steps(),
+		Slug: slug, Title: view.Title, Summary: view.Summary, Steps: view.Steps,
+		Format:    view.Format,
 		Publisher: publisher, CreatedAt: created, UpdatedAt: now,
-		Verified: verdictOf(d, now),
+		Verified: verdictOf(view, now),
 		Locked:   h.store.HasPassword(slug) || len(h.store.Allow(slug)) > 0,
 	}
-	if d.Source != nil {
-		m.Repo, m.Number, m.URL = d.Source.Repo, d.Source.Number, d.Source.URL
+	if s := view.Source; s != nil {
+		m.Repo, m.Number, m.URL = s.Repo, s.Number, s.URL
 	}
-	if err := h.store.Put(slug, d, m); err != nil {
+	if err := h.store.Put(slug, doc, m); err != nil {
 		h.fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
@@ -250,37 +267,24 @@ func (h *hostServer) save(w http.ResponseWriter, slug string, d *Doc, res *LoadR
 // verdictOf reads the check states the publisher baked into the document. This
 // site has no working tree, so what a snippet was worth at publishing time is
 // the only thing it can honestly report about it afterwards.
-func verdictOf(d *Doc, at time.Time) *Verified {
+func verdictOf(view *Walkthrough, at time.Time) *Verified {
 	v := &Verified{At: at}
-	if d.Source != nil {
-		v.Commit = d.Source.Commit
+	if view.Source != nil {
+		v.Commit = view.Source.Commit
 	}
-	tally := func(c *Check) {
-		if c == nil || c.State == "" || c.State == "unchecked" {
-			return
-		}
-		v.Checked++
-		switch c.State {
-		case "ok":
-		case "moved":
-			v.Moved++
-		default:
-			v.Stale++
-		}
-	}
-	for pi := range d.Parts {
-		for si := range d.Parts[pi].Sections {
-			for ii := range d.Parts[pi].Sections[si].Steps {
-				st := &d.Parts[pi].Sections[si].Steps[ii]
-				if st.Code != nil {
-					tally(st.Code.Check)
-				}
-				if st.Diagram == nil {
+	for _, p := range view.Tour() {
+		for _, sec := range p.Sections {
+			for _, snip := range sec.Snippets {
+				switch snip.State {
+				case "", "unchecked":
 					continue
+				case "ok", "match":
+				case "moved":
+					v.Moved++
+				default:
+					v.Stale++
 				}
-				for _, ref := range st.Diagram.Refs {
-					tally(ref.Check)
-				}
+				v.Checked++
 			}
 		}
 	}
@@ -293,7 +297,7 @@ func verdictOf(d *Doc, at time.Time) *Verified {
 // deriveSlug names a walkthrough after what it is about, because a URL someone
 // pastes into a channel should say something. innovadis-dev/Fincent plus
 // "PR #3347" becomes fincent-pr-3347.
-func deriveSlug(d *Doc) string {
+func deriveSlug(d *Walkthrough) string {
 	if d.Source != nil {
 		repo := d.Source.Repo
 		if i := strings.LastIndexByte(repo, '/'); i >= 0 {
@@ -394,8 +398,17 @@ func (h *hostServer) payload(slug string) (*payload, error) {
 	if m != nil {
 		stamp = m.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
+	// The link builder wants the source in one shape, and the two versions do
+	// not store it in the same one, so the document is read once here to work
+	// that out. A stored document has already been validated, so a failure is
+	// this build no longer understanding what it wrote.
+	res, err := ParseDoc(d, "walkthrough "+slug)
+	if err != nil {
+		return nil, err
+	}
+	view := res.View()
 	return &payload{
-		Doc: d, Hosted: true, Meta: m, GitHub: BuildGitHubLinks(d.Source),
+		Doc: d, Hosted: true, Meta: m, GitHub: BuildGitHubLinks(view.Source),
 		Settings: defaultSettings(),
 		Stamp:    stamp,
 	}, nil

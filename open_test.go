@@ -94,10 +94,10 @@ func TestPickWorktreeSkipsTheCheckoutItselfAndBareOnes(t *testing.T) {
 }
 
 func TestNewWorktreePathFollowsWhereTheyAlreadyLive(t *testing.T) {
-	d := &Doc{Source: &Source{
+	d := &SourceView{
 		Commit: "144da9aa073bdb720c1b9a271504b0e9ec4ea627",
 		URL:    "https://github.com/innovadis-dev/Fincent/pull/4164",
-	}}
+	}
 	root := "C:/Projects/Fincent"
 
 	// Two of the three linked worktrees live under the same directory, so a new
@@ -121,7 +121,7 @@ branch refs/heads/another
 	}
 
 	// Not a pull request, so the commit names it.
-	d.Source.URL = "https://github.com/innovadis-dev/Fincent"
+	d.URL = "https://github.com/innovadis-dev/Fincent"
 	want = filepath.Join("C:/Projects", "Fincent-144da9a")
 	if got := newWorktreePath(root, only, d); got != want {
 		t.Errorf("newWorktreePath outside a pull request = %q, want %q", got, want)
@@ -129,11 +129,11 @@ branch refs/heads/another
 }
 
 func TestFetchCommandUsesThePullRequestRef(t *testing.T) {
-	pr := &Doc{Source: &Source{URL: "https://github.com/innovadis-dev/Fincent/pull/4164"}}
+	pr := &SourceView{URL: "https://github.com/innovadis-dev/Fincent/pull/4164"}
 	if got := fetchCommand(pr); got != "git fetch origin pull/4164/head" {
 		t.Errorf("fetchCommand for a pull request = %q", got)
 	}
-	if got := fetchCommand(&Doc{Source: &Source{URL: ""}}); got != "git fetch" {
+	if got := fetchCommand(&SourceView{URL: ""}); got != "git fetch" {
 		t.Errorf("fetchCommand outside a pull request = %q", got)
 	}
 }
@@ -153,13 +153,13 @@ func TestSameCommitComparesEitherWayRound(t *testing.T) {
 // A walkthrough without a commit says nothing about where it should be read,
 // so the checkout that was found stays.
 func TestCheckoutForLeavesThingsAloneWithoutACommit(t *testing.T) {
-	for _, d := range []*Doc{{}, {Source: &Source{}}} {
+	for _, d := range []*SourceView{nil, {}} {
 		root, notes := checkoutFor("C:/Projects/Fincent", false, d)
 		if root != "C:/Projects/Fincent" || notes != nil {
 			t.Errorf("checkoutFor moved to %q and said %v", root, notes)
 		}
 	}
-	if root, notes := checkoutFor("", false, &Doc{Source: &Source{Commit: "abc"}}); root != "" || notes != nil {
+	if root, notes := checkoutFor("", false, &SourceView{Commit: "abc"}); root != "" || notes != nil {
 		t.Errorf("checkoutFor without a checkout returned %q and %v", root, notes)
 	}
 }
@@ -204,7 +204,7 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 	write("a.txt", "two\n")
 	git(main, "commit", "-am", "two")
 
-	d := &Doc{Source: &Source{Commit: first, URL: "https://github.com/x/y/pull/7"}}
+	d := &SourceView{Commit: first, URL: "https://github.com/x/y/pull/7"}
 
 	// With nothing checked out on it, the way to get there is printed and the
 	// checkout stays where it is.

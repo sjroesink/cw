@@ -20,7 +20,7 @@ const legacyDoc = `{
 }`
 
 func TestLegacyFilesStillLoad(t *testing.T) {
-	res, err := ParseDoc([]byte(legacyDoc), "legacy.json", mustSchema())
+	res, err := ParseDoc([]byte(legacyDoc), "legacy.json")
 	if err != nil {
 		t.Fatalf("an older file failed to load: %v", err)
 	}

@@ -32,8 +32,8 @@ var landingHTML string
 var unlockHTML string
 
 type hostServer struct {
-	store  *Store
-	schema *schemaDoc
+	store *Store
+
 	vendor *Vendor
 	web    fs.FS
 	base   string
@@ -107,7 +107,7 @@ func cmdHost(args []string) {
 	}
 
 	settings, _, _ := LoadSettings()
-	h := &hostServer{store: store, schema: mustSchema(), vendor: NewVendor(settings.Offline),
+	h := &hostServer{store: store, vendor: NewVendor(settings.Offline),
 		web: sub, base: base, dev: dev, trusted: trusted, trustedFrom: from, secret: secret}
 	h.vendor.Prewarm()
 

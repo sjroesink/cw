@@ -92,7 +92,7 @@ func cmdOpen(args []string) {
 	// origin remote actually names that repository.
 	guessed := ""
 	if f.root == "" {
-		if guessed = guessRoot(doc); guessed != "" {
+		if guessed = guessRoot(doc.Source); guessed != "" {
 			f.root = guessed
 		}
 	}
@@ -107,16 +107,18 @@ func cmdOpen(args []string) {
 	// resolve against a temp directory would point the open buttons at
 	// somewhere arbitrary. Only --root decides where the code is on this
 	// machine.
-	doc.Root = ""
+	if doc.V1 != nil {
+		doc.V1.Root = ""
+	}
 	path := filepath.Join(dir, name+".json")
-	if err := WriteDoc(path, doc); err != nil {
+	if err := WriteDoc(path, doc.Document()); err != nil {
 		die("%v", err)
 	}
 
 	// Which checkout to read this against is not always the one that was
 	// found. A worktree already sitting on the right commit is a better answer
 	// than telling somebody to move the branch they are working on.
-	root, notes := checkoutFor(f.root, guessed == "" && f.root != "", doc)
+	root, notes := checkoutFor(f.root, guessed == "" && f.root != "", doc.Source)
 	f.root = root
 
 	fmt.Printf("%s\n  fetched from %s\n", doc.Title, url)
@@ -148,7 +150,7 @@ func apiURL(target, site string) string {
 	return target
 }
 
-func fetchDoc(url, password, key string) (*Doc, string, error) {
+func fetchDoc(url, password, key string) (*Walkthrough, string, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", err
@@ -179,17 +181,24 @@ func fetchDoc(url, password, key string) (*Doc, string, error) {
 		return nil, "", err
 	}
 	var body struct {
-		Doc  *Doc  `json:"doc"`
-		Meta *Meta `json:"meta"`
+		Doc  json.RawMessage `json:"doc"`
+		Meta *Meta           `json:"meta"`
 	}
-	if err := json.Unmarshal(raw, &body); err != nil || body.Doc == nil {
+	if err := json.Unmarshal(raw, &body); err != nil || len(body.Doc) == 0 {
 		return nil, "", fmt.Errorf("%s did not answer with a walkthrough", url)
+	}
+	// The document is read here rather than trusted, so a walkthrough written
+	// in a version this build does not know says so now, with a sentence, and
+	// not by rendering as an empty page.
+	res, err := ParseDoc(body.Doc, url)
+	if err != nil {
+		return nil, "", err
 	}
 	name := "walkthrough"
 	if body.Meta != nil && body.Meta.Slug != "" {
 		name = body.Meta.Slug
 	}
-	return body.Doc, name, nil
+	return res.View(), name, nil
 }
 
 // ---------------------------------------------------------------- the checkout
@@ -198,11 +207,11 @@ func fetchDoc(url, password, key string) (*Doc, string, error) {
 // confirmed against its origin remote rather than against its directory name,
 // because a directory called Fincent that is a different repository would send
 // every open button somewhere wrong.
-func guessRoot(d *Doc) string {
-	if d.Source == nil || d.Source.Repo == "" {
+func guessRoot(d *SourceView) string {
+	if d == nil || d.Repo == "" {
 		return ""
 	}
-	want := strings.ToLower(strings.Trim(d.Source.Repo, "/"))
+	want := strings.ToLower(strings.Trim(d.Repo, "/"))
 
 	cwd, _ := os.Getwd()
 	var candidates []string
@@ -298,15 +307,15 @@ func remoteNames(dir, want string) bool {
 // pinned says the reader named the root themselves. Then it is not moved:
 // being told about a better checkout is help, being sent to a different one
 // than you asked for is not.
-func checkoutFor(root string, pinned bool, d *Doc) (string, []string) {
-	if root == "" || d.Source == nil || d.Source.Commit == "" {
+func checkoutFor(root string, pinned bool, d *SourceView) (string, []string) {
+	if root == "" || d == nil || d.Commit == "" {
 		return root, nil
 	}
 	head := ""
 	if out, err := runIn(root, "git", "rev-parse", "HEAD"); err == nil {
 		head = strings.TrimSpace(out)
 	}
-	want := d.Source.Commit
+	want := d.Commit
 	if head == "" || sameCommit(head, want) {
 		return root, nil
 	}
@@ -314,7 +323,7 @@ func checkoutFor(root string, pinned bool, d *Doc) (string, []string) {
 		short(want), short(head))}
 
 	all := worktreesOf(root)
-	if w, why := pickWorktree(all, root, want, d.Source.Head); w.Path != "" {
+	if w, why := pickWorktree(all, root, want, d.Head); w.Path != "" {
 		if pinned {
 			return root, append(notes,
 				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why))
@@ -334,7 +343,7 @@ func checkoutFor(root string, pinned bool, d *Doc) (string, []string) {
 	notes = append(notes,
 		"a worktree reads it without touching this checkout:",
 		"    git worktree add --detach "+newWorktreePath(root, all, d)+" "+short(want))
-	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
+	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
 		notes = append(notes, "or move this checkout instead: gh pr checkout "+m[2])
 	}
 	return root, notes
@@ -405,9 +414,9 @@ func pickWorktree(all []worktree, root, commit, branch string) (worktree, string
 // repository already keeps its worktrees rather than inventing a convention
 // for somebody. Only when there are none does it fall back to a directory
 // beside the checkout, and then the name carries the repository too.
-func newWorktreePath(root string, all []worktree, d *Doc) string {
-	name := short(d.Source.Commit)
-	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
+func newWorktreePath(root string, all []worktree, d *SourceView) string {
+	name := short(d.Commit)
+	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
 		name = "pr-" + m[2]
 	}
 
@@ -432,8 +441,8 @@ func newWorktreePath(root string, all []worktree, d *Doc) string {
 // fetchCommand is what brings the commit into the object store. A pull request
 // has a ref of its own, which works for a fork as well, where fetching the
 // branch by name would not.
-func fetchCommand(d *Doc) string {
-	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
+func fetchCommand(d *SourceView) string {
+	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
 		return "git fetch origin pull/" + m[2] + "/head"
 	}
 	return "git fetch"

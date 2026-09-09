@@ -188,3 +188,26 @@ func EnsureAnchors(d *Doc) int {
 	}
 	return filled
 }
+
+// EnsureAnchors2 is EnsureAnchors for cw/2: it fills in what can be worked out
+// from the text, so an author never types a hash by hand. It is a second
+// function rather than a flag on the first because cw/2 counts and hashes by its
+// own rules, and sharing one of those would quietly change the other format.
+func EnsureAnchors2(d *Doc2) int {
+	n := 0
+	d.walkBlocks(func(at string, b *Block) {
+		if b.Type != BlockCode || b.Snippet == nil {
+			return
+		}
+		s := b.Snippet
+		if s.Hash == nil {
+			s.Hash = &ContentHash{Algorithm: "sha256", Value: snippetHash2(s.Text)}
+			n++
+		}
+		if s.Source != nil && s.Source.StartLine > 0 && s.Source.EndLine == 0 {
+			s.Source.EndLine = s.Source.StartLine + snippetLines2(s.Text) - 1
+			n++
+		}
+	})
+	return n
+}

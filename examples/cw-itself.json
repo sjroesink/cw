@@ -32,16 +32,17 @@
               "body": "A walkthrough is a title, a summary, and a list of parts that hold sections that hold steps. There is no template and no per-topic code anywhere: adding a walkthrough is adding a file.",
               "code": {
                 "file": "doc.go",
-                "from": 19,
-                "text": "type Doc struct {\n\tSchema   string         `json:\"$schema,omitempty\"`\n\tVersion  string         `json:\"version\"`\n\tTitle    string         `json:\"title\"`\n\tSource   *Source        `json:\"source,omitempty\"`\n\tSummary  string         `json:\"summary,omitempty\"`\n\tRoot     string         `json:\"root,omitempty\"`\n\tLanguage string         `json:\"language,omitempty\"`\n\tParts    []Part         `json:\"parts\"`\n\tExt      map[string]any `json:\"ext,omitempty\"`\n}\n\n// FormatVersion is the only version this build reads and writes.\nconst FormatVersion = \"cw/1\"",
+                "from": 21,
+                "text": "type Doc struct {\n\tSchema   string         `json:\"$schema,omitempty\"`\n\tVersion  string         `json:\"version\"`\n\tTitle    string         `json:\"title\"`\n\tSource   *Source        `json:\"source,omitempty\"`\n\tSummary  string         `json:\"summary,omitempty\"`\n\tRoot     string         `json:\"root,omitempty\"`\n\tLanguage string         `json:\"language,omitempty\"`\n\tParts    []Part         `json:\"parts\"`\n\tExt      map[string]any `json:\"ext,omitempty\"`\n}\n\n// The two versions of the format this build reads. A document says which one\n// it is, and that is the only thing that decides how it is read and rendered.\n// FormatDefault is what a new walkthrough is written as.\nconst (\n\tFormatV1      = \"cw/1\"\n\tFormatV2      = \"cw/2\"\n\tFormatDefault = FormatV2\n)",
                 "hi": [
-                  20,
-                  32
+                  23,
+                  37,
+                  38
                 ],
                 "notes": [
                   {
-                    "line": 32,
-                    "text": "The only field that is required to be one exact value. A reader that does not know the version refuses the file instead of guessing."
+                    "line": 37,
+                    "text": "The one field that has to be an exact value, and there are two of them now. A reader that does not know the version refuses the file instead of guessing which half of it it still understands."
                   }
                 ]
               },
@@ -52,7 +53,7 @@
                 "refs": {
                   "schema": {
                     "file": "schema.go",
-                    "from": 91,
+                    "from": 233,
                     "note": "The same schema an editor validates against is enforced here, so the two cannot drift apart.",
                     "code": "func (v *validator) walk(at string, value any, sch map[string]any) {\n\tsch = v.resolve(sch)\n\tif len(sch) == 0 {\n\t\treturn\n\t}\n\n\tif want, ok := sch[\"type\"].(string); ok && !typeMatches(want, value) {\n\t\tv.fail(at, \"should be %s, not %s\", want, kindOf(value))\n\t\treturn\n\t}"
                   }
@@ -65,11 +66,11 @@
               "callout": "commit is what makes a link permanent. Without it a snippet can only point at a branch tip, which is a link that quietly starts lying.",
               "code": {
                 "file": "doc.go",
-                "from": 34,
+                "from": 42,
                 "text": "// Source is where the walkthrough came from, in a form something other than a\n// human can act on. It is what turns a path plus a line number into a link.\ntype Source struct {\n\tKind         string   `json:\"kind,omitempty\"`\n\tProvider     string   `json:\"provider,omitempty\"`\n\tRepo         string   `json:\"repo,omitempty\"`\n\tNumber       string   `json:\"number,omitempty\"`\n\tURL          string   `json:\"url,omitempty\"`\n\tState        string   `json:\"state,omitempty\"`\n\tCommit       string   `json:\"commit,omitempty\"`\n\tBase         string   `json:\"base,omitempty\"`\n\tHead         string   `json:\"head,omitempty\"`\n\tChangedFiles []string `json:\"changedFiles,omitempty\"`\n}",
                 "hi": [
-                  41,
-                  44
+                  49,
+                  52
                 ]
               }
             }
@@ -84,11 +85,11 @@
               "body": "A snippet states where it ends and what it hashes to. Both are written by the publisher rather than by hand, so if they disagree with the text, the text was edited afterwards and the anchor is now something a consumer would act on and be wrong about.",
               "code": {
                 "file": "doc.go",
-                "from": 334,
+                "from": 294,
                 "text": "// anchorErrs holds to and sha to what the text actually is. Both are written by\n// cw publish rather than by hand, so a mismatch means the snippet was edited\n// afterwards and the anchor is now a lie a consumer would act on.\nfunc anchorErrs(errf func(string, ...any), at string, from, to int, sha, text string) {\n\tif to != 0 {\n\t\twant := from + snippetLines(text) - 1\n\t\tif from == 0 {\n\t\t\twant = snippetLines(text)\n\t\t}\n\t\tif to != want {\n\t\t\terrf(\"%s: to is %d and the snippet ends at %d. Leave it out and it is filled in on publish\", at, to, want)\n\t\t}\n\t}\n\tif sha != \"\" && sha != snippetSha(text) {\n\t\terrf(\"%s: sha does not match the text, so it was edited after the hash was written. Leave it out and it is filled in on publish\", at)\n\t}\n}",
                 "hi": [
-                  343,
-                  347
+                  303,
+                  307
                 ]
               }
             },
@@ -97,10 +98,10 @@
               "body": "Progress and every deep link hang off the ids in the document. Two siblings with the same id means a link lands on whichever one the reader's browser happened to find first, which is why this is an error rather than a warning.",
               "code": {
                 "file": "doc.go",
-                "from": 210,
+                "from": 170,
                 "text": "\t}\n\tif len(d.Parts) > 6 {\n\t\twarnf(\"%d parts. The overview is a set of cards to choose from, not a list to scroll\", len(d.Parts))\n\t}\n\n\t// An id is what a reader's progress and every deep link hang off, so two of\n\t// them in one place is worse than none: it silently sends people to the\n\t// wrong step.\n\tpartIDs := map[string]bool{}\n\tunique := func(seen map[string]bool, id, at string) {\n\t\tif id == \"\" {",
                 "hi": [
-                  216
+                  176
                 ]
               }
             }
@@ -127,11 +128,11 @@
               "body": "A server on localhost can be reached by any site you have open. So the origin has to be this loopback server, and the caller has to know the token that was stamped into the page when it was served. Only then does anything get read.",
               "code": {
                 "file": "main.go",
-                "from": 580,
+                "from": 623,
                 "text": "So the page asks for them by a stamp of what is in this build. A build that\nchanges a file changes the URL, which makes caching them hard the right thing\nrather than a trap.\n*/\n\nvar assetStamp = sync.OnceValue(func() string {\n\tsum := sha256.New()\n\tsub, err := fs.Sub(webFS, \"web\")\n\tif err != nil {\n\t\treturn \"0\"\n\t}\n\t_ = fs.WalkDir(sub, \".\", func(path string, d fs.DirEntry, err error) error {\n\t\tif err != nil || d.IsDir() {",
                 "hi": [
-                  582,
-                  586
+                  625,
+                  629
                 ]
               }
             },
@@ -140,11 +141,11 @@
               "body": "Every file path in a walkthrough is joined onto the root, cleaned, and then asked whether it is still inside. A path that climbs out is refused. Clamping it instead would open a file the walkthrough never named.",
               "code": {
                 "file": "doc.go",
-                "from": 368,
+                "from": 334,
                 "text": "func (t *Tree) safePath(rel string) (string, string, error) {\n\tclean := strings.ReplaceAll(strings.TrimSpace(rel), \"\\\\\", \"/\")\n\tif clean == \"\" {\n\t\treturn \"\", \"\", fmt.Errorf(\"empty path\")\n\t}\n\tabs := filepath.Clean(filepath.Join(t.Root, filepath.FromSlash(clean)))\n\trp, err := filepath.Rel(t.Root, abs)\n\tif err != nil || rp == \"..\" || strings.HasPrefix(rp, \"..\"+string(filepath.Separator)) {\n\t\treturn \"\", \"\", fmt.Errorf(\"%s lies outside the root\", rel)\n\t}\n\treturn abs, filepath.ToSlash(rp), nil\n}",
                 "hi": [
-                  374,
-                  376
+                  340,
+                  342
                 ]
               }
             }
@@ -159,12 +160,12 @@
               "body": "First the lines are compared where the snippet claims to be. If they are not there, the whole file is searched for them. Finding them somewhere else is a different answer from not finding them at all.",
               "code": {
                 "file": "doc.go",
-                "from": 448,
+                "from": 422,
                 "text": "\tif from > 0 && from-1+len(want) <= len(have) && matches(from-1) {\n\t\treturn &Check{State: \"ok\", Line: from}\n\t}\n\tfor start := 0; start+len(want) <= len(have); start++ {\n\t\tif !matches(start) {\n\t\t\tcontinue\n\t\t}\n\t\tif from > 0 && start+1 != from {\n\t\t\treturn &Check{State: \"moved\", Line: start + 1,\n\t\t\t\tNote: fmt.Sprintf(\"the same lines now start at %d, not %d\", start+1, from)}\n\t\t}\n\t\treturn &Check{State: \"ok\", Line: start + 1}\n\t}\n\treturn &Check{State: \"gone\", Note: \"these lines are no longer in \" + path}\n}",
                 "hi": [
-                  448,
-                  455,
-                  461
+                  422,
+                  429,
+                  435
                 ]
               }
             },
@@ -173,10 +174,10 @@
               "body": "Code that shifted down because something was inserted above it is still the code the walkthrough describes. Code that is gone is not. The page shows the two differently, and the count in the banner only holds the second.",
               "code": {
                 "file": "doc.go",
-                "from": 110,
+                "from": 118,
                 "text": "}\n\ntype LineNote struct {\n\tLine int    `json:\"line\"`\n\tText string `json:\"text\"`\n}\n\ntype Diff struct {\n\tFile  string     `json:\"file\"`\n\tFrom  int        `json:\"from,omitempty\"`",
                 "hi": [
-                  114
+                  122
                 ]
               }
             }
@@ -238,11 +239,11 @@
               "code": {
                 "file": "github.go",
                 "from": 37,
-                "text": "func BuildGitHubLinks(src *Source) *GitHubLinks {\n\tif src == nil {\n\t\treturn nil\n\t}\n\tif src.Provider != \"\" && src.Provider != \"github\" {\n\t\treturn nil\n\t}\n\trepo := strings.Trim(strings.TrimSpace(src.Repo), \"/\")\n\tout := &GitHubLinks{Repo: repo, Commit: src.Commit}\n\n\tif repo != \"\" && strings.Count(repo, \"/\") == 1 && src.Commit != \"\" {\n\t\tout.BlobBase = \"https://github.com/\" + repo + \"/blob/\" + src.Commit + \"/\"\n\t}\n\tif files := prFilesURL(src.URL); files != \"\" {\n\t\tout.PRFiles = files\n\t\tout.Anchors = map[string]string{}\n\t\tfor _, f := range src.ChangedFiles {\n\t\t\tf = strings.TrimSpace(f)\n\t\t\tif f == \"\" {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tout.Anchors[f] = diffAnchor(f)\n\t\t}\n\t}\n\tif out.BlobBase == \"\" && out.PRFiles == \"\" {\n\t\treturn nil\n\t}\n\treturn out\n}",
+                "text": "func BuildGitHubLinks(src *SourceView) *GitHubLinks {\n\tif src == nil {\n\t\treturn nil\n\t}\n\tif src.Provider != \"\" && src.Provider != \"github\" {\n\t\treturn nil\n\t}\n\trepo := strings.Trim(strings.TrimSpace(src.Repo), \"/\")\n\tout := &GitHubLinks{Repo: repo, Commit: src.Commit}\n\n\tif repo != \"\" && strings.Count(repo, \"/\") == 1 && src.Commit != \"\" {\n\t\tout.BlobBase = \"https://github.com/\" + repo + \"/blob/\" + src.Commit + \"/\"\n\t}\n\tif files := prFilesURL(src.URL); files != \"\" {\n\t\tout.PRFiles = files\n\t\tout.Anchors = map[string]string{}\n\t\tfor _, f := range src.ChangedFiles {\n\t\t\tf = strings.TrimSpace(f)\n\t\t\tif f == \"\" {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tout.Anchors[f] = diffAnchor(f)\n\t\t}\n\t}\n\tif out.BlobBase == \"\" && out.PRFiles == \"\" {\n\t\treturn nil\n\t}\n\treturn out\n}",
                 "hi": [
+                  44,
                   47,
-                  50,
-                  62
+                  50
                 ]
               },
               "diagram": {

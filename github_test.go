@@ -41,7 +41,7 @@ func TestPRFilesURL(t *testing.T) {
 }
 
 func TestBuildGitHubLinks(t *testing.T) {
-	full := &Source{
+	full := &SourceView{
 		Provider: "github", Repo: "innovadis-dev/Fincent",
 		URL:          "https://github.com/innovadis-dev/Fincent/pull/3347",
 		Commit:       "9f2c1ab",
@@ -62,13 +62,13 @@ func TestBuildGitHubLinks(t *testing.T) {
 	}
 
 	// A commit and no pull request still permalinks, which is the subsystem case.
-	if g := BuildGitHubLinks(&Source{Repo: "o/r", Commit: "abc1234"}); g == nil || g.BlobBase == "" || g.PRFiles != "" {
+	if g := BuildGitHubLinks(&SourceView{Repo: "o/r", Commit: "abc1234"}); g == nil || g.BlobBase == "" || g.PRFiles != "" {
 		t.Errorf("a bare commit should permalink and nothing else, got %+v", g)
 	}
 
 	// Nothing to point at is nil rather than an object full of empty strings,
 	// so the page has one case to check instead of four.
-	for _, src := range []*Source{
+	for _, src := range []*SourceView{
 		nil,
 		{},
 		{Repo: "o/r"},

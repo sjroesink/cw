@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,12 +18,18 @@ func testStore(t *testing.T) *Store {
 	return s
 }
 
-func sampleDoc(title string) *Doc {
-	return &Doc{
+// The store keeps bytes, so a fixture is bytes. Going through the struct keeps
+// the fixture honest about what a document looks like.
+func sampleDoc(title string) json.RawMessage {
+	raw, err := json.Marshal(&Doc{
 		Version: FormatV1, Title: title,
 		Parts: []Part{{Title: "One", Sections: []Section{{Title: "Two",
 			Steps: []Step{{Title: "Three", Body: "Four"}}}}}},
+	})
+	if err != nil {
+		panic(err)
 	}
+	return raw
 }
 
 func TestStoreRoundTrip(t *testing.T) {
@@ -35,7 +43,7 @@ func TestStoreRoundTrip(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	want := sampleDoc("A walkthrough")
-	if err := s.Put("thing", want, Meta{Slug: "thing", Title: want.Title, Steps: 1, UpdatedAt: now}); err != nil {
+	if err := s.Put("thing", want, Meta{Slug: "thing", Title: "A walkthrough", Steps: 1, UpdatedAt: now}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -43,8 +51,12 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Title != want.Title || len(got.Parts) != 1 {
-		t.Errorf("the document came back different: %+v", got)
+	back, err := ParseDoc(got, "stored")
+	if err != nil {
+		t.Fatalf("what came back does not read as a walkthrough: %v", err)
+	}
+	if view := back.View(); view.Title != "A walkthrough" || view.Steps != 1 {
+		t.Errorf("the document came back different: %+v", view)
 	}
 	if meta.Slug != "thing" || !meta.UpdatedAt.Equal(now) {
 		t.Errorf("the metadata came back different: %+v", meta)
@@ -135,8 +147,8 @@ func TestWritesAreAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _, err := s.Get("thing")
-	if err != nil || got.Title != "second" {
-		t.Fatalf("after a second write: %v, %+v", err, got)
+	if err != nil || !bytes.Contains(got, []byte(`"second"`)) {
+		t.Fatalf("after a second write: %v, %s", err, got)
 	}
 	// Nothing is left lying around beside the two files that belong there.
 	entries, _ := os.ReadDir(s.dirFor("thing"))

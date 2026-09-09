@@ -1,0 +1,410 @@
+{
+  "$schema": "../schema/walkthrough.v2.schema.json",
+  "version": "cw/2",
+  "title": "cw/2, one block at a time",
+  "summary": "The second version of the walkthrough format replaces a step's fixed slots with an ordered list of blocks. This walkthrough is one of each, so a reader can be checked against something that uses all of them.",
+  "language": "json",
+  "source": {
+    "kind": "subsystem",
+    "provider": "github",
+    "repositoryUrl": "https://github.com/sjroesink/cw",
+    "label": "the format itself"
+  },
+  "parts": [
+    {
+      "id": "prose",
+      "title": "Words",
+      "summary": "Two blocks that hold sentences, and the small amount of markup they take.",
+      "sections": [
+        {
+          "id": "prose-blocks",
+          "title": "Prose and asides",
+          "summary": "A markdown block is the paragraph a step is built around. A callout is the sentence that would otherwise start with a warning.",
+          "steps": [
+            {
+              "id": "markdown-block",
+              "title": "A markdown block is the prose",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "In cw/1 a step had one `body` and four optional slots, and the page decided what order they came in. A cw/2 step has **blocks**, in the order they were written, as many as it needs.\n\nA reader has to handle this much markdown:\n\n- paragraphs, and *emphasis* inside them\n- lists, this one included\n- fenced code, for the times the code is not a snippet of anything\n\nAnything past that it shows as the characters that are there, which is allowed and is what keeps `<img src=x onerror=alert(1)>` a piece of text."
+                },
+                {
+                  "type": "markdown",
+                  "text": "Two markdown blocks in a row are two paragraphs the author chose to separate. That is the point of the list: it can say things the slots could not."
+                }
+              ]
+            },
+            {
+              "id": "callout-block",
+              "title": "A callout says it louder",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "cw/1 had one callout and no way to say how much it mattered. cw/2 has four levels, and a title when the first line needs to be short."
+                },
+                {
+                  "type": "callout",
+                  "severity": "info",
+                  "text": "Info is the default, and the one to reach for when the sentence is context rather than a warning."
+                },
+                {
+                  "type": "callout",
+                  "severity": "tip",
+                  "title": "Worth knowing",
+                  "text": "A tip is something that saves the reader time, not something that saves them from a mistake."
+                },
+                {
+                  "type": "callout",
+                  "severity": "warning",
+                  "text": "A warning is about something that will go wrong later if it is not noticed now."
+                },
+                {
+                  "type": "callout",
+                  "severity": "danger",
+                  "text": "Danger is for the thing that deletes data or lets somebody in. Use it about twice a year."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "title": "Code",
+      "summary": "Snippets with a place in a file, snippets without one, and the difference between them.",
+      "sections": [
+        {
+          "id": "snippets",
+          "title": "Snippets",
+          "summary": "A snippet with a source is a claim about a real file. A snippet without one is an illustration, and cw/2 wants that difference stated rather than guessed.",
+          "steps": [
+            {
+              "id": "sourced-snippet",
+              "title": "A snippet that came from somewhere",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "This one names its file and the line it starts on, so a reader holding the repository can check it and say whether it is still true. `endLine` and the hash are left out here and filled in by `cw migrate` or `cw publish`, because nobody should type a sha256 by hand."
+                },
+                {
+                  "type": "code",
+                  "id": "the-version-field",
+                  "snippet": {
+                    "label": "The one field every cw/2 document must have",
+                    "language": "json",
+                    "text": "    \"version\": {\n      \"const\": \"cw/2\"\n    },\n",
+                    "source": {
+                      "file": "schema/walkthrough.v2.schema.json",
+                      "startLine": 14,
+                      "endLine": 16
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "82c43369175b00524446dd577e0b3875515efd4981e3bcd0bf5dece66c72fbfe"
+                    },
+                    "highlights": [
+                      {
+                        "lines": {
+                          "start": 2
+                        }
+                      }
+                    ],
+                    "annotations": [
+                      {
+                        "lines": {
+                          "start": 2
+                        },
+                        "text": "A constant, not a pattern. A document is one version or the other, and a reader that does not know the value refuses the file."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "markdown",
+                  "text": "The highlight and the annotation both point at line 2, and line 2 is the second line of the snippet rather than line 15 of the file. That is the change: move the excerpt up a file and one number changes instead of all of them."
+                }
+              ]
+            },
+            {
+              "id": "loose-snippet",
+              "title": "A snippet that came from nowhere",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "shape-of-a-block",
+                  "snippet": {
+                    "label": "The shape, not the code",
+                    "language": "json",
+                    "text": "{\n  \"type\": \"code\",\n  \"id\": \"something-a-diagram-can-point-at\",\n  \"snippet\": { \"text\": \"...\" }\n}",
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "2e96505a8b55692c46ba12e6438b3c0c4be83987b5b3a7abb5e40f51a72d361c"
+                    }
+                  }
+                },
+                {
+                  "type": "callout",
+                  "severity": "tip",
+                  "text": "No source means no claim. Pseudocode, a shape, a config fragment: leave source out and nothing will tell the reader it went stale, because it was never in a file to begin with."
+                }
+              ]
+            },
+            {
+              "id": "diff-block",
+              "title": "A diff has two sides and knows both",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "cw/1 wrote a diff as a flat list of lines with one starting number for both sides, which is enough to draw and not enough to be right. cw/2 uses the coordinates a unified diff actually has."
+                },
+                {
+                  "type": "diff",
+                  "id": "the-slots-going-away",
+                  "before": {
+                    "file": "doc.go"
+                  },
+                  "after": {
+                    "file": "doc2.go"
+                  },
+                  "language": "go",
+                  "caption": "What the step struct lost, and what it gained.",
+                  "hunks": [
+                    {
+                      "oldStart": 67,
+                      "oldLines": 6,
+                      "newStart": 92,
+                      "newLines": 4,
+                      "heading": "type Step",
+                      "lines": [
+                        {
+                          "kind": "context",
+                          "text": "type Step struct {"
+                        },
+                        {
+                          "kind": "context",
+                          "text": "\tID    string `json:\"id,omitempty\"`"
+                        },
+                        {
+                          "kind": "delete",
+                          "text": "\tBody    string   `json:\"body\"`"
+                        },
+                        {
+                          "kind": "delete",
+                          "text": "\tCallout string   `json:\"callout,omitempty\"`"
+                        },
+                        {
+                          "kind": "delete",
+                          "text": "\tDiagram *Diagram `json:\"diagram,omitempty\"`"
+                        },
+                        {
+                          "kind": "add",
+                          "text": "\tBlocks []Block `json:\"blocks\"`"
+                        },
+                        {
+                          "kind": "context",
+                          "text": "}"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "text": "`oldLines` is 6 because the hunk has three context lines and three deleted ones. `newLines` is 4: the same three context lines and one added one. A validator checks that arithmetic, because the counts are the half of a diff nobody ever looks at and therefore the half that rots."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pictures",
+      "title": "Pictures",
+      "summary": "A diagram that links to code, a timeline of complete frames, and the one door out of the format.",
+      "sections": [
+        {
+          "id": "drawn",
+          "title": "Drawn things",
+          "summary": "Both of these existed in cw/1 and both were tied to the step they sat in. In cw/2 they point at blocks by name.",
+          "steps": [
+            {
+              "id": "diagram-block",
+              "title": "A diagram links to a block",
+              "blocks": [
+                {
+                  "type": "diagram",
+                  "format": "mermaid",
+                  "text": "flowchart LR\n  doc[walkthrough.json] --> version{version}\n  version -->|cw/1| one[render1]\n  version -->|cw/2| two[render2]",
+                  "alt": "A document flows into a version check, which chooses between the cw/1 reader and the cw/2 reader.",
+                  "caption": "The version is read before anything else, because everything else depends on it.",
+                  "links": [
+                    {
+                      "nodeId": "version",
+                      "blockId": "the-version-field"
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "text": "Clicking the version shape opens the code block earlier in this walkthrough. In cw/1 a diagram carried its own copy of the code, which meant the same lines were pasted twice and went stale separately."
+                }
+              ]
+            },
+            {
+              "id": "timeline-block",
+              "title": "A timeline is a run of complete pictures",
+              "blocks": [
+                {
+                  "type": "timeline",
+                  "id": "loading-a-document",
+                  "caption": "Reading one walkthrough, four frames.",
+                  "nodes": [
+                    {
+                      "id": "file",
+                      "label": "the file"
+                    },
+                    {
+                      "id": "schema",
+                      "label": "the schema"
+                    },
+                    {
+                      "id": "struct",
+                      "label": "the struct"
+                    },
+                    {
+                      "id": "page",
+                      "label": "the page"
+                    }
+                  ],
+                  "frames": [
+                    {
+                      "label": "Read",
+                      "note": "The bytes arrive, and the version is the first thing looked at.",
+                      "states": [
+                        {
+                          "nodeId": "file",
+                          "state": "active",
+                          "detail": "version: cw/2"
+                        },
+                        {
+                          "nodeId": "schema",
+                          "state": "idle"
+                        },
+                        {
+                          "nodeId": "struct",
+                          "state": "idle"
+                        },
+                        {
+                          "nodeId": "page",
+                          "state": "idle"
+                        }
+                      ]
+                    },
+                    {
+                      "label": "Validate",
+                      "note": "The version picked a schema, and the schema decides whether this goes any further.",
+                      "states": [
+                        {
+                          "nodeId": "file",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "schema",
+                          "state": "active",
+                          "detail": "v2.json"
+                        },
+                        {
+                          "nodeId": "struct",
+                          "state": "idle"
+                        },
+                        {
+                          "nodeId": "page",
+                          "state": "idle"
+                        }
+                      ]
+                    },
+                    {
+                      "label": "Inspect",
+                      "note": "What a schema cannot say: that the counts add up and the links point at something.",
+                      "states": [
+                        {
+                          "nodeId": "file",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "schema",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "struct",
+                          "state": "active"
+                        },
+                        {
+                          "nodeId": "page",
+                          "state": "idle"
+                        }
+                      ]
+                    },
+                    {
+                      "label": "Render",
+                      "note": "The same version choice reaches the browser, which loads one renderer and not the other.",
+                      "states": [
+                        {
+                          "nodeId": "file",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "schema",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "struct",
+                          "state": "done"
+                        },
+                        {
+                          "nodeId": "page",
+                          "state": "active"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "text": "Every frame names every node. That is what lets a reader jump to the third frame without having drawn the first two, and it is why a frame that leaves a node out is a broken frame rather than an implied one."
+                }
+              ]
+            },
+            {
+              "id": "extension-block",
+              "title": "An extension carries its own way out",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "Every other block type is core, and a type this format has never heard of is an invalid document rather than an extension. `extension` is the one place to put something the format has no opinion about."
+                },
+                {
+                  "type": "extension",
+                  "name": "roesink/queue-simulator",
+                  "version": 1,
+                  "data": {
+                    "tasks": 5,
+                    "workers": 2
+                  },
+                  "fallback": "Two workers take five tasks off one queue, one task at a time each. The point is that task four starts before task three finishes."
+                },
+                {
+                  "type": "markdown",
+                  "text": "This reader has never heard of `roesink/queue-simulator`, so it shows the fallback. That is the deal: an extension that does not carry a sentence a reader can print is not an extension, it is a hole."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

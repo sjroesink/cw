@@ -21,7 +21,7 @@ func testHost(t *testing.T) (*hostServer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &hostServer{store: store, schema: mustSchema(), vendor: NewVendor(true),
+	return &hostServer{store: store, vendor: NewVendor(true),
 		web: sub, base: "https://cw.example"}, key
 }
 
@@ -203,8 +203,12 @@ func TestUpdateKeepsTheURLAndTheCreationDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.Title != "A better title" {
-		t.Errorf("the update did not land: %q", doc.Title)
+	stored, err := ParseDoc(doc, "stored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title := stored.View().Title; title != "A better title" {
+		t.Errorf("the update did not land: %q", title)
 	}
 	if !meta.CreatedAt.Equal(first.CreatedAt) {
 		t.Error("updating in place reset the creation date")

@@ -82,15 +82,15 @@ WALKTHROUGH = {
                                 "that hold steps. There is no template and no per-topic code anywhere: adding "
                                 "a walkthrough is adding a file."
                             ),
-                            "code": code("doc.go", 19, 32,
-                                         hi=[20, 32],
-                                         notes=[{"line": 32, "text": "The only field that is required to be one exact value. A reader that does not know the version refuses the file instead of guessing."}]),
+                            "code": code("doc.go", 21, 40,
+                                         hi=[23, 37, 38],
+                                         notes=[{"line": 37, "text": "The one field that has to be an exact value, and there are two of them now. A reader that does not know the version refuses the file instead of guessing which half of it it still understands."}]),
                             "diagram": {
                                 "kind": "flow",
                                 "caption": "One document, and more than one thing that can read it.",
                                 "def": "flowchart LR\n  json[\"walkthrough.json\"] --> schema[\"walkthrough.schema.json\"]\n  schema --> local[\"cw serve\"]\n  schema --> host[\"cw host\"]\n  local --> tree[\"your working tree\"]\n  host --> gh[\"GitHub\"]\n  json -.-> other[\"an editor plugin,\\nsomething that reads it aloud\"]",
                                 "refs": {
-                                    "schema": ref("schema.go", 91, 100, "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
+                                    "schema": ref("schema.go", 233, 242, "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
                                 },
                             },
                         },
@@ -102,7 +102,7 @@ WALKTHROUGH = {
                                 "line number into a link, so they belong in one place a machine can read."
                             ),
                             "callout": "commit is what makes a link permanent. Without it a snippet can only point at a branch tip, which is a link that quietly starts lying.",
-                            "code": code("doc.go", 34, 47, hi=[41, 44]),
+                            "code": code("doc.go", 42, 55, hi=[49, 52]),
                         },
                     ],
                 },
@@ -118,7 +118,7 @@ WALKTHROUGH = {
                                 "edited afterwards and the anchor is now something a consumer would act on and "
                                 "be wrong about."
                             ),
-                            "code": code("doc.go", 334, 350, hi=[343, 347]),
+                            "code": code("doc.go", 294, 310, hi=[303, 307]),
                         },
                         {
                             "title": "Two ids in one place is worse than none",
@@ -127,7 +127,7 @@ WALKTHROUGH = {
                                 "with the same id means a link lands on whichever one the reader's browser "
                                 "happened to find first, which is why this is an error rather than a warning."
                             ),
-                            "code": code("doc.go", 210, 220, hi=[216]),
+                            "code": code("doc.go", 170, 180, hi=[176]),
                         },
                     ],
                 },
@@ -154,7 +154,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 580, 592, hi=[582, 586]),
+                            "code": code("main.go", 623, 635, hi=[625, 629]),
                         },
                         {
                             "title": "A path is checked, not cleaned",
@@ -163,7 +163,7 @@ WALKTHROUGH = {
                                 "asked whether it is still inside. A path that climbs out is refused. Clamping "
                                 "it instead would open a file the walkthrough never named."
                             ),
-                            "code": code("doc.go", 368, 379, hi=[374, 376]),
+                            "code": code("doc.go", 334, 345, hi=[340, 342]),
                         },
                     ],
                 },
@@ -178,7 +178,7 @@ WALKTHROUGH = {
                                 "there, the whole file is searched for them. Finding them somewhere else is a "
                                 "different answer from not finding them at all."
                             ),
-                            "code": code("doc.go", 448, 462, hi=[448, 455, 461]),
+                            "code": code("doc.go", 422, 436, hi=[422, 429, 435]),
                             "notes": None,
                         },
                         {
@@ -188,7 +188,7 @@ WALKTHROUGH = {
                                 "code the walkthrough describes. Code that is gone is not. The page shows the "
                                 "two differently, and the count in the banner only holds the second."
                             ),
-                            "code": code("doc.go", 110, 119, hi=[114]),
+                            "code": code("doc.go", 118, 127, hi=[122]),
                         },
                     ],
                 },
@@ -242,7 +242,7 @@ WALKTHROUGH = {
                                 "is nothing to link to and the answer is nil rather than an object full of "
                                 "empty strings."
                             ),
-                            "code": code("github.go", 37, 65, hi=[47, 50, 62]),
+                            "code": code("github.go", 37, 65, hi=[44, 47, 50]),
                             "diagram": {
                                 "kind": "flow",
                                 "caption": "One decision, made once per walkthrough rather than once per click.",

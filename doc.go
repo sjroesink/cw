@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // A walkthrough: one pull request or one subsystem, split into parts, sections
@@ -154,54 +156,6 @@ type Check struct {
 	State string `json:"state"` // ok, moved, gone, missing-file, outside-root, unchecked
 	Line  int    `json:"line,omitempty"`
 	Note  string `json:"note,omitempty"`
-}
-
-// ---------------------------------------------------------------- loading
-
-type LoadResult struct {
-	Doc      *Doc
-	Errors   []string
-	Warnings []string
-}
-
-func LoadDoc(path string, sch *schemaDoc) (*LoadResult, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDoc(raw, path, sch)
-}
-
-// ParseDoc is LoadDoc without the file, so the API validates the bytes a
-// publisher posts through exactly the path cw check walks. The name is only
-// used to say where a complaint came from.
-func ParseDoc(raw []byte, name string, sch *schemaDoc) (*LoadResult, error) {
-	var generic any
-	if err := json.Unmarshal(raw, &generic); err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON: %w", name, err)
-	}
-
-	res := &LoadResult{}
-	// A file written before cw/1 is lifted first, so the validator sees the
-	// shape it knows and the author gets errors about their walkthrough rather
-	// than about a format they never chose.
-	if obj, ok := generic.(map[string]any); ok && migrateLegacy(obj) {
-		res.Warnings = append(res.Warnings,
-			"this file was written before cw/1 and was read as if it had been migrated. Run cw migrate to make that permanent")
-	}
-	res.Errors = sch.Validate(generic)
-
-	lifted, err := json.Marshal(generic)
-	if err != nil {
-		return nil, fmt.Errorf("%s could not be re-read after migration: %w", name, err)
-	}
-	d := &Doc{}
-	if err := json.Unmarshal(lifted, d); err != nil {
-		return nil, fmt.Errorf("%s does not match the schema: %w", name, err)
-	}
-	res.Doc = d
-	inspect(res, d)
-	return res, nil
 }
 
 // inspect covers what a schema cannot say: that a highlighted line is inside the
@@ -369,6 +323,12 @@ func (c *Code) first() int {
 // becomes an absolute one.
 type Tree struct {
 	Root string
+
+	// What the comparison was made against, worked out from the root the
+	// first time anything asks. cw/1 never wrote it down; cw/2 does.
+	once     sync.Once
+	revision string
+	dirty    bool
 }
 
 func (t *Tree) safePath(rel string) (string, string, error) {
@@ -388,8 +348,16 @@ func (t *Tree) safePath(rel string) (string, string, error) {
 // weaker promise than resolving the code live, and it is the one this format can
 // keep: the page says what it found rather than showing yesterday's code as if
 // it were today's.
-func (t *Tree) Verify(d *Doc) (checked, moved, stale int) {
-	tally := func(c *Check) {
+//
+// Which snippets there are is the document's business and differs between the
+// versions. What to do with one is the same either way, so the walk happens once
+// in the view and the comparison happens once here.
+func (t *Tree) Verify(w *Walkthrough) (checked, moved, stale int) {
+	at := time.Now()
+	revision, dirty := t.state()
+	for _, s := range w.Snippets {
+		c := t.find(s.File, s.Text, s.From)
+		s.Set(Verdict{Check: c, At: at, Revision: revision, Dirty: dirty})
 		checked++
 		switch c.State {
 		case "ok", "unchecked":
@@ -399,25 +367,25 @@ func (t *Tree) Verify(d *Doc) (checked, moved, stale int) {
 			stale++
 		}
 	}
-	for pi := range d.Parts {
-		for si := range d.Parts[pi].Sections {
-			for ii := range d.Parts[pi].Sections[si].Steps {
-				st := &d.Parts[pi].Sections[si].Steps[ii]
-				if st.Code != nil {
-					st.Code.Check = t.find(st.Code.File, st.Code.Text, st.Code.From)
-					tally(st.Code.Check)
-				}
-				if st.Diagram == nil {
-					continue
-				}
-				for _, ref := range st.Diagram.Refs {
-					ref.Check = t.find(ref.File, ref.Code, ref.From)
-					tally(ref.Check)
-				}
-			}
-		}
-	}
 	return checked, moved, stale
+}
+
+// state is what the comparison was measured against. cw/1 never recorded it and
+// cw/2 has to, and asking git twice per walkthrough is cheap enough that it is
+// not worth threading through every caller.
+func (t *Tree) state() (string, bool) {
+	t.once.Do(func() {
+		if t.Root == "" {
+			return
+		}
+		if out, err := exec.Command("git", "-C", t.Root, "rev-parse", "HEAD").Output(); err == nil {
+			t.revision = strings.TrimSpace(string(out))
+		}
+		if out, err := exec.Command("git", "-C", t.Root, "status", "--porcelain").Output(); err == nil {
+			t.dirty = strings.TrimSpace(string(out)) != ""
+		}
+	})
+	return t.revision, t.dirty
 }
 
 // find looks for the block in the file: first where the walkthrough says it is,

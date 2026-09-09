@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
@@ -69,6 +70,10 @@ type Meta struct {
 	URL       string `json:"url,omitempty"`
 	Publisher string `json:"publisher,omitempty"`
 	Steps     int    `json:"steps"`
+	// Format is which version of the walkthrough format doc.json is written in.
+	// The listing and cw open want to know without opening it, and a store that
+	// holds two formats and records neither can only find out by guessing.
+	Format string `json:"format,omitempty"`
 	// Locked says the walkthrough asks something of a reader before it opens.
 	// It is a fact about the page, not a secret, and it is what keeps a
 	// protected walkthrough out of a listing somebody else is reading.
@@ -119,7 +124,11 @@ func (s *Store) Exists(slug string) bool {
 	return err == nil
 }
 
-func (s *Store) Put(slug string, d *Doc, m Meta) error {
+// Put takes the document as bytes rather than as a struct. The store holds
+// walkthroughs of more than one version and has no business re-encoding one
+// through the struct of the other, which is how a field nobody thought about
+// goes missing.
+func (s *Store) Put(slug string, doc json.RawMessage, m Meta) error {
 	if !ValidSlug(slug) {
 		return fmt.Errorf("%q cannot be a walkthrough name: lowercase letters, digits and dashes, up to 64 characters", slug)
 	}
@@ -130,13 +139,13 @@ func (s *Store) Put(slug string, d *Doc, m Meta) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := writeJSONFile(filepath.Join(dir, "doc.json"), d); err != nil {
+	if err := writeJSONFile(filepath.Join(dir, "doc.json"), doc); err != nil {
 		return err
 	}
 	return writeJSONFile(filepath.Join(dir, "meta.json"), m)
 }
 
-func (s *Store) Get(slug string) (*Doc, *Meta, error) {
+func (s *Store) Get(slug string) (json.RawMessage, *Meta, error) {
 	if !ValidSlug(slug) {
 		return nil, nil, ErrNoSuchWalkthrough
 	}
@@ -144,8 +153,8 @@ func (s *Store) Get(slug string) (*Doc, *Meta, error) {
 	defer s.mu.RUnlock()
 
 	dir := s.dirFor(slug)
-	var d Doc
-	if err := readJSONFile(filepath.Join(dir, "doc.json"), &d); err != nil {
+	doc, err := os.ReadFile(filepath.Join(dir, "doc.json"))
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil, ErrNoSuchWalkthrough
 		}
@@ -156,7 +165,7 @@ func (s *Store) Get(slug string) (*Doc, *Meta, error) {
 		return nil, nil, err
 	}
 	m.Slug = slug
-	return &d, &m, nil
+	return doc, &m, nil
 }
 
 // List returns the metadata of everything published, newest first. A directory
@@ -422,10 +431,14 @@ func hashKey(key string) string {
 // writeJSONFile writes beside the target and renames over it, so a reader never
 // catches a half-written file and a failed write leaves the old one standing.
 func writeJSONFile(path string, v any) error {
-	body, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
 		return err
 	}
+	body := bytes.TrimRight(buf.Bytes(), "\n")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, append(body, '\n'), 0o644); err != nil {
 		return err

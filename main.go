@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"embed"
@@ -183,13 +184,11 @@ func schemaBytes(version string) []byte {
 	return schemaV2JSON
 }
 
-func mustSchema() *schemaDoc { return schemaFor(FormatV1) }
-
 // resolveRoot decides which checkout the paths hang off: what was asked for,
 // what the walkthrough says, or the repository the walkthrough sits in. An
 // empty root is allowed: without one the page still reads, it just cannot open
 // anything or say whether the code is still there.
-func resolveRoot(f flags, d *Doc) string {
+func resolveRoot(f flags, hint string) string {
 	pick := func(p, base string) string {
 		if p == "" {
 			return ""
@@ -216,10 +215,8 @@ func resolveRoot(f flags, d *Doc) string {
 	if r := pick(f.root, cwd); r != "" {
 		return r
 	}
-	if d != nil {
-		if r := pick(d.Root, dir); r != "" {
-			return r
-		}
+	if r := pick(hint, dir); r != "" {
+		return r
 	}
 	if out, err := runIn(dir, "git", "rev-parse", "--show-toplevel"); err == nil {
 		if r := pick(strings.TrimSpace(out), dir); r != "" {
@@ -252,36 +249,30 @@ func rootName(root string) string {
 
 func cmdCheck(args []string) {
 	f := parseFlags(args, true)
-	res, err := LoadDoc(f.file, mustSchema())
+	res, err := LoadDoc(f.file)
 	if err != nil {
 		die("%v", err)
 	}
-	root := resolveRoot(f, res.Doc)
+	view := res.View()
+	root := resolveRoot(f, view.RootHint)
 	tree := &Tree{Root: root}
-	checked, moved, stale := tree.Verify(res.Doc)
+	checked, moved, stale := tree.Verify(view)
 
-	fmt.Printf("%s\n", res.Doc.Title)
-	fmt.Printf("  parts %d, steps %d\n", len(res.Doc.Parts), res.Doc.Steps())
+	fmt.Printf("%s\n", view.Title)
+	fmt.Printf("  format %s, parts %d, steps %d\n", view.Format, len(view.Tour()), view.Steps)
 	if root == "" {
-		fmt.Printf("  root  none, so nothing was checked against a working tree\n")
+		fmt.Printf("  root   none, so nothing was checked against a working tree\n")
 	} else {
-		fmt.Printf("  root  %s\n", root)
+		fmt.Printf("  root   %s\n", root)
 	}
 	fmt.Println()
 
-	for pi, p := range res.Doc.Parts {
+	for pi, p := range view.Tour() {
 		fmt.Printf("  [%d] %s\n", pi+1, p.Title)
-		for _, s := range p.Sections {
-			fmt.Printf("      %s\n", s.Title)
-			for _, st := range s.Steps {
-				if st.Code != nil {
-					report("        ", st.Code.File, st.Code.Check)
-				}
-				if st.Diagram != nil {
-					for key, r := range st.Diagram.Refs {
-						report("        ", r.File+" ("+key+")", r.Check)
-					}
-				}
+		for _, sec := range p.Sections {
+			fmt.Printf("      %s\n", sec.Title)
+			for _, snip := range sec.Snippets {
+				report("        ", snip.Name, snip.State, snip.Note)
 			}
 		}
 	}
@@ -304,21 +295,22 @@ func cmdCheck(args []string) {
 	}
 }
 
-func report(indent, what string, c *Check) {
-	if c == nil {
+// report prints what the working tree said about one snippet. The states are
+// the document's own words and the two versions do not use the same ones, so
+// both sets are read here rather than translated into a third.
+func report(indent, what, state, note string) {
+	switch state {
+	case "":
 		return
-	}
-	switch c.State {
-	case "ok":
+	case "ok", "match":
 		fmt.Printf("%sok     %s\n", indent, what)
 	case "unchecked":
 		fmt.Printf("%s-      %s\n", indent, what)
 	case "moved":
-		fmt.Printf("%sMOVED  %s, %s\n", indent, what, c.Note)
+		fmt.Printf("%sMOVED  %s, %s\n", indent, what, note)
 	default:
-		note := c.Note
 		if note == "" {
-			note = c.State
+			note = state
 		}
 		fmt.Printf("%sSTALE  %s, %s\n", indent, what, note)
 	}
@@ -332,7 +324,7 @@ func report(indent, what string, c *Check) {
 // progress is keyed on them.
 func cmdMigrate(args []string) {
 	f := parseFlags(args, true)
-	res, err := LoadDoc(f.file, mustSchema())
+	res, err := LoadDoc(f.file)
 	if err != nil {
 		die("%v", err)
 	}
@@ -343,23 +335,38 @@ func cmdMigrate(args []string) {
 		}
 		os.Exit(1)
 	}
-	ids := EnsureIDs(res.Doc)
-	anchors := EnsureAnchors(res.Doc)
-	if err := WriteDoc(f.file, res.Doc); err != nil {
+	ids, anchors := 0, 0
+	var out any = res.Doc
+	if res.Doc2 != nil {
+		// cw/2 requires ids in the file, so there are never any to fill in: the
+		// schema refused the document before it got here.
+		anchors, out = EnsureAnchors2(res.Doc2), res.Doc2
+	} else {
+		ids, anchors = EnsureIDs(res.Doc), EnsureAnchors(res.Doc)
+	}
+	if err := WriteDoc(f.file, out); err != nil {
 		die("%v", err)
 	}
-	fmt.Printf("%s is now %s\n", f.file, res.Doc.Version)
+	fmt.Printf("%s is now %s\n", f.file, res.View().Format)
 	fmt.Printf("  %d id(s) filled in, %d snippet anchor(s) filled in\n", ids, anchors)
 }
 
 // WriteDoc writes a walkthrough back over itself, indented the way a hand-edited
 // file is and with the schema reference kept at the top.
-func WriteDoc(path string, d *Doc) error {
-	body, err := json.MarshalIndent(d, "", "  ")
-	if err != nil {
+// WriteDoc writes a walkthrough back out in the form somebody will edit it in.
+// The encoder is built by hand rather than using json.MarshalIndent for one
+// reason: MarshalIndent escapes <, > and & into \u003c and friends, which is
+// correct JSON and unreadable prose, and a walkthrough is full of prose about
+// code that contains all three.
+func WriteDoc(path string, d any) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(d); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o644)
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
 // ---------------------------------------------------------------- small commands
@@ -466,22 +473,24 @@ type server struct {
 	token  string
 	vendor *Vendor
 	web    fs.FS
-	schema *schemaDoc
 }
 
 type payload struct {
-	Doc      *Doc     `json:"doc"`
-	Root     string   `json:"root"`
-	RootName string   `json:"rootName"`
-	File     string   `json:"file"`
-	Settings Settings `json:"settings"`
-	SetPath  string   `json:"settingsPath"`
-	IDEs     []IDE    `json:"ides"`
-	Errors   []string `json:"errors,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
-	Moved    int      `json:"moved"`
-	Stale    int      `json:"stale"`
-	Stamp    string   `json:"stamp"`
+	// The document goes out as the bytes it already is. The page picks its
+	// renderer from the version inside it, and re-encoding it through one
+	// version's struct would be the server deciding that on its behalf.
+	Doc      json.RawMessage `json:"doc"`
+	Root     string          `json:"root"`
+	RootName string          `json:"rootName"`
+	File     string          `json:"file"`
+	Settings Settings        `json:"settings"`
+	SetPath  string          `json:"settingsPath"`
+	IDEs     []IDE           `json:"ides"`
+	Errors   []string        `json:"errors,omitempty"`
+	Warnings []string        `json:"warnings,omitempty"`
+	Moved    int             `json:"moved"`
+	Stale    int             `json:"stale"`
+	Stamp    string          `json:"stamp"`
 
 	// Set by the hosted server only. The page reads Hosted to decide whether a
 	// line number opens an editor or a link, and everything below it is the
@@ -513,19 +522,18 @@ func runServe(f flags) {
 		settings.Offline = true
 	}
 
-	sch := mustSchema()
-	res, err := LoadDoc(abs, sch)
+	res, err := LoadDoc(abs)
 	if err != nil {
 		die("%v", err)
 	}
-	root := resolveRoot(f, res.Doc)
+	root := resolveRoot(f, res.View().RootHint)
 
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
 		die("the web assets are missing from this build: %v", err)
 	}
 	s := &server{file: abs, root: root, dev: f.dev, token: randomToken(),
-		vendor: NewVendor(settings.Offline), web: sub, schema: sch}
+		vendor: NewVendor(settings.Offline), web: sub}
 	s.vendor.Prewarm()
 
 	port := settings.Port
@@ -739,24 +747,32 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 }
 
 func (s *server) build() (*payload, error) {
-	res, err := LoadDoc(s.file, s.schema)
+	res, err := LoadDoc(s.file)
 	if err != nil {
 		return nil, err
 	}
+	view := res.View()
 	settings, spath, _ := LoadSettings()
 	tree := &Tree{Root: s.root}
-	_, moved, stale := tree.Verify(res.Doc)
+	_, moved, stale := tree.Verify(view)
 
+	// The bytes are taken after Verify and not before, because Verify writes
+	// what it found into the document. The page shows what this machine sees
+	// now, not what the publisher saw on theirs.
+	raw, err := view.Raw()
+	if err != nil {
+		return nil, err
+	}
 	return &payload{
-		Doc: res.Doc, Root: filepath.ToSlash(s.root), RootName: rootName(s.root),
+		Doc: raw, Root: filepath.ToSlash(s.root), RootName: rootName(s.root),
 		File: filepath.ToSlash(s.file), Settings: settings, SetPath: spath, IDEs: DetectIDEs(),
-		Errors: res.Errors, Warnings: res.Warnings, Moved: moved, Stale: stale, Stamp: s.stamp(res.Doc),
+		Errors: res.Errors, Warnings: res.Warnings, Moved: moved, Stale: stale, Stamp: s.stamp(view),
 	}, nil
 }
 
 // stamp changes whenever the walkthrough or a file it points at is touched, so
 // the page can offer a reload instead of quietly showing yesterday.
-func (s *server) stamp(d *Doc) string {
+func (s *server) stamp(w *Walkthrough) string {
 	var latest int64
 	if st, err := os.Stat(s.file); err == nil {
 		latest = st.ModTime().UnixNano()
@@ -764,7 +780,7 @@ func (s *server) stamp(d *Doc) string {
 	n := 0
 	tree := &Tree{Root: s.root}
 	if s.root != "" {
-		for _, f := range d.Files() {
+		for _, f := range w.Files {
 			abs, _, err := tree.safePath(f)
 			if err != nil {
 				continue
@@ -777,7 +793,7 @@ func (s *server) stamp(d *Doc) string {
 			}
 		}
 	}
-	return fmt.Sprintf("%d-%d-%d", latest, n, d.Steps())
+	return fmt.Sprintf("%d-%d-%d", latest, n, w.Steps)
 }
 
 func (s *server) handleWalkthrough(w http.ResponseWriter, r *http.Request) {
@@ -790,12 +806,12 @@ func (s *server) handleWalkthrough(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
-	res, err := LoadDoc(s.file, s.schema)
+	res, err := LoadDoc(s.file)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"stamp": "unreadable", "fatal": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stamp": s.stamp(res.Doc)})
+	writeJSON(w, http.StatusOK, map[string]any{"stamp": s.stamp(res.View())})
 }
 
 func (s *server) handleIDEs(w http.ResponseWriter, r *http.Request) {

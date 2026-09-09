@@ -128,7 +128,7 @@ func cmdPublish(args []string) {
 		}
 	}
 
-	res, err := LoadDoc(f.file, mustSchema())
+	res, err := LoadDoc(f.file)
 	if err != nil {
 		die("%v", err)
 	}
@@ -139,13 +139,13 @@ func cmdPublish(args []string) {
 		}
 		os.Exit(1)
 	}
-	d := res.Doc
+	view := res.View()
 
 	// The tree check is the whole reason to publish from here rather than by
 	// posting the file from anywhere.
-	root := resolveRoot(flags{file: f.file, root: f.root}, d)
+	root := resolveRoot(flags{file: f.file, root: f.root}, view.RootHint)
 	tree := &Tree{Root: root}
-	checked, moved, stale := tree.Verify(d)
+	checked, moved, stale := tree.Verify(view)
 	if root == "" {
 		fmt.Fprintf(os.Stderr, "cw: no working tree was found, so the snippets were not checked. "+
 			"The page will say the code is unverified.\n")
@@ -156,11 +156,19 @@ func cmdPublish(args []string) {
 		os.Exit(1)
 	}
 
-	fillSource(d, root)
-	EnsureIDs(d)
-	EnsureAnchors(d)
+	if view.V2 != nil {
+		fillSource2(view.V2, root)
+		EnsureAnchors2(view.V2)
+	} else {
+		fillSource(view.V1, root)
+		EnsureIDs(view.V1)
+		EnsureAnchors(view.V1)
+	}
+	// Filling in the source moves what the link builder reads, so the view is
+	// taken again rather than answering from before.
+	view = res.View()
 
-	body, err := json.Marshal(d)
+	body, err := view.Raw()
 	if err != nil {
 		die("%v", err)
 	}
@@ -196,11 +204,11 @@ func cmdPublish(args []string) {
 	}
 
 	fmt.Printf("%s\n", out.URL)
-	fmt.Printf("  %s\n", d.Title)
+	fmt.Printf("  %s\n", view.Title)
 	if root != "" {
 		fmt.Printf("  %d snippet(s) checked: %d moved, %d no longer there\n", checked, moved, stale)
 	}
-	if c := commitOf(d); c != "" {
+	if c := commitOf(view); c != "" {
 		fmt.Printf("  against commit %s\n", short(c))
 	}
 	if f.password != nil {
@@ -452,11 +460,128 @@ func fillFromPR(s *Source, root, repo, number string) {
 	}
 }
 
-func commitOf(d *Doc) string {
-	if d.Source == nil {
+func commitOf(w *Walkthrough) string {
+	if w.Source == nil {
 		return ""
 	}
-	return d.Source.Commit
+	return w.Source.Commit
+}
+
+/*
+fillSource2 is fillSource for cw/2, and it is a second function rather than the
+same one with branches because almost every field has a different name and a
+different shape. cw/2 says where something came from in URLs and revisions: a
+repository is a link rather than an owner/name shorthand, and a comparison has
+two commits rather than two branch names, so that it still means the same thing
+after somebody force-pushes.
+*/
+func fillSource2(d *Doc2, root string) {
+	if d.Source == nil {
+		d.Source = &Source2{}
+	}
+	s := d.Source
+
+	if m := prURLPattern.FindStringSubmatch(s.URL); m != nil {
+		if s.RepositoryURL == "" {
+			s.RepositoryURL = "https://github.com/" + m[1]
+		}
+		if s.Provider == "" {
+			s.Provider = "github"
+		}
+		if s.Kind == "" {
+			s.Kind = "pull-request"
+		}
+		if s.Identifier == "" {
+			s.Identifier = m[2]
+		}
+		if s.Label == "" {
+			s.Label = "PR #" + m[2]
+		}
+		fillFromPR2(s, root, m[1], m[2])
+	}
+	if root == "" {
+		return
+	}
+	if s.Revision == "" {
+		if out, err := runIn(root, "git", "rev-parse", "HEAD"); err == nil {
+			s.Revision = strings.TrimSpace(out)
+		}
+	}
+}
+
+func fillFromPR2(s *Source2, root, repo, number string) {
+	out, err := runIn(root, "gh", "pr", "view", number, "--repo", repo,
+		"--json", "headRefOid,baseRefOid,state,files")
+	if err != nil {
+		return
+	}
+	var pr struct {
+		HeadRefOid string `json:"headRefOid"`
+		BaseRefOid string `json:"baseRefOid"`
+		State      string `json:"state"`
+		Files      []struct {
+			Path string `json:"path"`
+		} `json:"files"`
+	}
+	if json.Unmarshal([]byte(out), &pr) != nil {
+		return
+	}
+	if s.Revision == "" {
+		s.Revision = pr.HeadRefOid
+	}
+	if s.Comparison == nil && pr.BaseRefOid != "" && pr.HeadRefOid != "" {
+		s.Comparison = &Comparison{BaseRevision: pr.BaseRefOid, HeadRevision: pr.HeadRefOid}
+	}
+	if s.State == "" && pr.State != "" {
+		s.State = strings.ToLower(pr.State)
+	}
+	if len(s.ChangedFiles) > 0 {
+		return
+	}
+	// cw/2 wants to know what happened to each file, and gh does not say. git
+	// does, so it is asked first; the list from gh is the fallback, and there
+	// every file goes in the bucket the format keeps for "something else",
+	// because guessing "modified" would read as a fact.
+	if pr.BaseRefOid != "" && pr.HeadRefOid != "" {
+		if changed := changedFiles2(root, pr.BaseRefOid, pr.HeadRefOid); len(changed) > 0 {
+			s.ChangedFiles = changed
+			return
+		}
+	}
+	for _, f := range pr.Files {
+		s.ChangedFiles = append(s.ChangedFiles, FileChange{File: f.Path, Status: "other"})
+	}
+}
+
+var gitStatusWords = map[byte]string{
+	'A': "added", 'M': "modified", 'D': "deleted",
+	'R': "renamed", 'C': "copied", 'T': "type-changed",
+}
+
+func changedFiles2(root, base, head string) []FileChange {
+	out, err := runIn(root, "git", "diff", "--name-status", "--find-renames", base+"..."+head)
+	if err != nil {
+		return nil
+	}
+	var files []FileChange
+	for _, line := range strings.Split(strings.ReplaceAll(out, "\r\n", "\n"), "\n") {
+		cols := strings.Split(strings.TrimSpace(line), "\t")
+		if len(cols) < 2 || cols[0] == "" {
+			continue
+		}
+		word, known := gitStatusWords[cols[0][0]]
+		if !known {
+			word = "other"
+		}
+		// A rename and a copy name both sides: the old path first, the new one
+		// second, and it is the new one the walkthrough points at.
+		if len(cols) >= 3 && (word == "renamed" || word == "copied") {
+			files = append(files, FileChange{File: cols[2], PreviousFile: cols[1], Status: word})
+			continue
+		}
+		files = append(files, FileChange{File: cols[1], Status: word})
+	}
+	return files
 }
 
 func short(sha string) string {
