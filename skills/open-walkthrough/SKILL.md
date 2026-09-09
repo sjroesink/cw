@@ -44,21 +44,34 @@ It prints a `http://127.0.0.1:<port>/` and opens a browser. Give the person that
 |---|---|
 | `found the checkout at …` | It matched `source.repo` against the origin remote of a directory it found. Nothing to do |
 | `no checkout found` | It could not find the repository on this machine. Ask where it is and pass `--root <path>` |
-| `this was written against … and the checkout is on …` | Right repository, wrong place in history. See below |
+| `a worktree at … is on …, so that is what will be read` | It found a checkout already sitting on the right commit and used that one. Nothing to do |
+| `this was written against … and the checkout is on …` | Right repository, wrong place in history, and no worktree for it. See below |
 | `is protected. Give the password with --password` | Pass `--password`, or set `$env:CW_PASSWORD`. Ask them for it; never guess |
 | `does not allow this machine to read it` | An address restriction. Only whoever published it can change that |
 
-**4. The branch matters more than it looks.** A walkthrough is written against one commit. Read it
+**4. The commit matters more than it looks.** A walkthrough is written against one commit. Read it
 against a different one and most snippets report as moved or gone, which reads as the walkthrough
-being broken rather than the checkout being elsewhere. When it says so, offer the command it printed:
+being broken rather than the checkout being elsewhere in history.
+
+`cw open` handles the good case on its own: it looks through `git worktree list` and, if one of them
+is already on that commit or on the branch, reads there instead and says so. You do nothing.
+
+When there is none it prints the command for a new one, which is the part to act on:
 
 ```powershell
-gh pr checkout 3347        # for a walkthrough of a pull request
-git checkout 9f2c1ab       # otherwise
+git worktree add --detach C:\Users\you\.claude-worktrees\Fincent\pr-4164 144da9a
 ```
 
-Ask before running either. Switching branches in someone's working tree is not yours to decide, and
-they may have uncommitted work.
+Ask first, then run exactly what it printed, then run `cw open` again. The second run finds the
+worktree by itself, so no `--root` is needed. The path it suggests follows wherever that repository
+already keeps its worktrees, and `--detach` puts it on the commit the walkthrough was written
+against rather than on a branch that has moved on since.
+
+Do not reach for `gh pr checkout`. `cw open` prints it as a last line, but it moves the branch under
+whatever the person is working on, and they may have uncommitted changes. A worktree costs them
+nothing. Only offer it if they say they would rather not have another directory.
+
+If the commit is not in the object store yet, `cw open` says so and gives the fetch to run first.
 
 ## What they get that the link does not give them
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -112,6 +113,12 @@ func cmdOpen(args []string) {
 		die("%v", err)
 	}
 
+	// Which checkout to read this against is not always the one that was
+	// found. A worktree already sitting on the right commit is a better answer
+	// than telling somebody to move the branch they are working on.
+	root, notes := checkoutFor(f.root, guessed == "" && f.root != "", doc)
+	f.root = root
+
 	fmt.Printf("%s\n  fetched from %s\n", doc.Title, url)
 	if guessed != "" {
 		fmt.Printf("  found the checkout at %s\n", guessed)
@@ -119,7 +126,7 @@ func cmdOpen(args []string) {
 	if f.root == "" {
 		fmt.Printf("  no checkout found, so nothing will be opened or checked. Give one with --root\n")
 	}
-	for _, line := range commitNotes(f.root, doc) {
+	for _, line := range notes {
 		fmt.Printf("  %s\n", line)
 	}
 	fmt.Println()
@@ -277,33 +284,174 @@ func remoteNames(dir, want string) bool {
 	return strings.HasSuffix(url, "/"+want) || strings.HasSuffix(url, ":"+want)
 }
 
-// commitNotes says how far the checkout is from what the walkthrough describes.
-// Being on another branch is the usual reason a walkthrough looks broken
-// locally, so the way out is printed rather than left to be worked out.
-func commitNotes(root string, d *Doc) []string {
+// checkoutFor works out which of this machine's checkouts to read the
+// walkthrough against, and what to say about the choice.
+//
+// A checkout on another commit is the usual reason a walkthrough reads as
+// broken: the files the change adds are not there yet, so most snippets come
+// back missing and it looks like the walkthrough is wrong rather than the
+// reader being elsewhere in history. The obvious way out, gh pr checkout, moves
+// somebody's working tree out from under them. A worktree does not, and there
+// is often already one, so the repository's other checkouts are looked at
+// before anything is asked of the reader.
+//
+// pinned says the reader named the root themselves. Then it is not moved:
+// being told about a better checkout is help, being sent to a different one
+// than you asked for is not.
+func checkoutFor(root string, pinned bool, d *Doc) (string, []string) {
 	if root == "" || d.Source == nil || d.Source.Commit == "" {
-		return nil
+		return root, nil
 	}
 	head := ""
 	if out, err := runIn(root, "git", "rev-parse", "HEAD"); err == nil {
 		head = strings.TrimSpace(out)
 	}
-	if head == "" || strings.HasPrefix(head, d.Source.Commit) || strings.HasPrefix(d.Source.Commit, head) {
+	want := d.Source.Commit
+	if head == "" || sameCommit(head, want) {
+		return root, nil
+	}
+	notes := []string{fmt.Sprintf("this was written against %s and the checkout is on %s",
+		short(want), short(head))}
+
+	all := worktreesOf(root)
+	if w, why := pickWorktree(all, root, want, d.Source.Head); w.Path != "" {
+		if pinned {
+			return root, append(notes,
+				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why))
+		}
+		notes = append(notes, fmt.Sprintf("a worktree at %s is %s, so that is what will be read", w.Path, why))
+		if !sameCommit(w.Head, want) {
+			notes = append(notes, fmt.Sprintf("it is on %s though, so a snippet may still have moved", short(w.Head)))
+		}
+		return w.Path, notes
+	}
+
+	// Nothing checked out anywhere near it, so say how to get there. The
+	// worktree comes first because it costs this checkout nothing.
+	if _, err := runIn(root, "git", "cat-file", "-e", want+"^{commit}"); err != nil {
+		notes = append(notes, "that commit is not here yet: "+fetchCommand(d))
+	}
+	notes = append(notes,
+		"a worktree reads it without touching this checkout:",
+		"    git worktree add --detach "+newWorktreePath(root, all, d)+" "+short(want))
+	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
+		notes = append(notes, "or move this checkout instead: gh pr checkout "+m[2])
+	}
+	return root, notes
+}
+
+// ---------------------------------------------------------------- worktrees
+
+// worktree is one entry of git worktree list --porcelain.
+type worktree struct {
+	Path   string
+	Head   string
+	Branch string // the short name, empty when detached
+	Bare   bool
+}
+
+func worktreesOf(root string) []worktree {
+	out, err := runIn(root, "git", "worktree", "list", "--porcelain")
+	if err != nil {
 		return nil
 	}
+	return parseWorktrees(out)
+}
 
-	notes := []string{fmt.Sprintf("this was written against %s and the checkout is on %s",
-		short(d.Source.Commit), short(head))}
-
-	// A commit that is not even in the object store means a fetch first, which
-	// is worth knowing before trying to check anything out.
-	if _, err := runIn(root, "git", "cat-file", "-e", d.Source.Commit+"^{commit}"); err != nil {
-		notes = append(notes, "that commit is not in this checkout yet: git fetch")
+// parseWorktrees reads the porcelain form, which is groups of lines separated
+// by a blank one, each starting with the path.
+func parseWorktrees(out string) []worktree {
+	var all []worktree
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			all = append(all, worktree{Path: filepath.Clean(strings.TrimPrefix(line, "worktree "))})
+		case len(all) == 0:
+			// Anything before the first path belongs to nothing.
+		case strings.HasPrefix(line, "HEAD "):
+			all[len(all)-1].Head = strings.TrimPrefix(line, "HEAD ")
+		case strings.HasPrefix(line, "branch "):
+			all[len(all)-1].Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
+		case line == "bare":
+			all[len(all)-1].Bare = true
+		}
 	}
+	return all
+}
+
+// pickWorktree chooses the checkout that will make the snippets line up.
+// Sitting on exactly the commit is worth more than being on the right branch,
+// because a branch that has moved on since is how snippets drift in the first
+// place.
+func pickWorktree(all []worktree, root, commit, branch string) (worktree, string) {
+	usable := func(w worktree) bool { return !w.Bare && w.Path != "" && !samePath(w.Path, root) }
+	for _, w := range all {
+		if usable(w) && sameCommit(w.Head, commit) {
+			return w, "on " + short(commit)
+		}
+	}
+	if branch != "" {
+		for _, w := range all {
+			if usable(w) && w.Branch == branch {
+				return w, "on " + branch
+			}
+		}
+	}
+	return worktree{}, ""
+}
+
+// newWorktreePath suggests where a new one would go, following wherever this
+// repository already keeps its worktrees rather than inventing a convention
+// for somebody. Only when there are none does it fall back to a directory
+// beside the checkout, and then the name carries the repository too.
+func newWorktreePath(root string, all []worktree, d *Doc) string {
+	name := short(d.Source.Commit)
 	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
-		notes = append(notes, "to read it against the change itself: gh pr checkout "+m[2])
-	} else {
-		notes = append(notes, "to read it against the code it describes: git checkout "+short(d.Source.Commit))
+		name = "pr-" + m[2]
 	}
-	return notes
+
+	counts := map[string]int{}
+	best, most := "", 0
+	for _, w := range all {
+		if w.Bare || w.Path == "" || samePath(w.Path, root) {
+			continue
+		}
+		parent := filepath.Dir(w.Path)
+		counts[parent]++
+		if counts[parent] > most {
+			best, most = parent, counts[parent]
+		}
+	}
+	if best == "" {
+		return filepath.Join(filepath.Dir(root), filepath.Base(root)+"-"+name)
+	}
+	return filepath.Join(best, name)
+}
+
+// fetchCommand is what brings the commit into the object store. A pull request
+// has a ref of its own, which works for a fork as well, where fetching the
+// branch by name would not.
+func fetchCommand(d *Doc) string {
+	if m := prURLPattern.FindStringSubmatch(d.Source.URL); m != nil {
+		return "git fetch origin pull/" + m[2] + "/head"
+	}
+	return "git fetch"
+}
+
+func sameCommit(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}
+
+// samePath compares two checkouts. Case-insensitively on Windows, where git
+// answers C:/Projects/Fincent for the directory a reader called C:\Projects\fincent.
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
