@@ -194,6 +194,110 @@ func makeWorktree(o *offer, name string, offline bool) error {
 	return nil
 }
 
+// ---------------------------------------------------------------- catching up
+
+// catchUp is a worktree that is on the right branch but behind the commit the
+// walkthrough was written against, and the one step that would line it up.
+//
+// This is the only thing cw does to a checkout it did not make itself, so it is
+// the narrowest step there is: a fast-forward, of the branch that is already
+// checked out there, in a tree with nothing in it to lose. Anything wider is
+// somebody's own business and gets a sentence rather than a question.
+type catchUp struct {
+	Path   string   // the worktree, which belongs to whoever made it
+	Root   string   // the checkout it hangs off, where a fetch would run
+	Branch string   // what is checked out there
+	Head   string   // where it is now
+	Commit string   // where it would go
+	Fetch  []string // git arguments to run first, empty when the commit is here
+}
+
+// planCatchUp decides whether walking that worktree forward is something to
+// offer at all, and says why not when it is not. Every no here is a no because
+// something would be lost or changed that nobody asked about.
+func planCatchUp(root string, w worktree, d *SourceView, want string) (*catchUp, string) {
+	if out, err := gitIn(w.Path, "status", "--porcelain"); err != nil || strings.TrimSpace(out) != "" {
+		return nil, "there is work in it, so it stays where it is"
+	}
+	c := &catchUp{Path: w.Path, Root: root, Branch: w.Branch, Head: w.Head, Commit: want}
+	if _, err := gitIn(root, "cat-file", "-e", want+"^{commit}"); err != nil {
+		// Whether it is a fast-forward cannot be known before the commit is
+		// here, so that is checked again after the fetch rather than assumed.
+		c.Fetch = fetchArgs(d)
+		return c, ""
+	}
+	if !fastForward(root, w.Head, want) {
+		return nil, short(want) + " is not ahead of it, so nothing there can be walked forward onto it"
+	}
+	return c, ""
+}
+
+// fastForward says whether going from one commit to the other loses nothing,
+// which is the whole reason this is safe to offer.
+func fastForward(root, from, to string) bool {
+	_, err := gitIn(root, "merge-base", "--is-ancestor", from, to)
+	return err == nil
+}
+
+// offerCatchUp asks, and does what the answer says.
+//
+// What it changes is not given back at the end, and that is deliberate. A
+// worktree cw added is a directory nobody asked for and it goes. A branch that
+// was behind and is now on the commit it was going to reach anyway is not
+// damage to undo, and undoing it would be a second change to somebody's
+// checkout rather than one fewer.
+func offerCatchUp(c *catchUp, mode worktreeMode, offline bool) bool {
+	ask := fmt.Sprintf("  fast-forward %s in that worktree from %s to %s?",
+		c.Branch, short(c.Head), short(c.Commit))
+	if len(c.Fetch) > 0 {
+		ask = fmt.Sprintf("  fetch %s and fast-forward %s in that worktree onto it?",
+			short(c.Commit), c.Branch)
+	}
+	switch {
+	case mode == worktreeNo:
+	case offline && len(c.Fetch) > 0:
+	case mode == worktreeYes, askYes(ask):
+		if err := walkForward(c); err != nil {
+			fmt.Printf("  %v\n", err)
+			break
+		}
+		fmt.Printf("  that worktree is on %s now, and it stays there when this server stops\n", short(c.Commit))
+		return true
+	}
+	for _, line := range catchUpNotes(c) {
+		fmt.Printf("  %s\n", line)
+	}
+	return false
+}
+
+// catchUpNotes is the same step said as commands, for when it is not going to
+// happen here.
+func catchUpNotes(c *catchUp) []string {
+	var notes []string
+	if len(c.Fetch) > 0 {
+		notes = append(notes, "that commit is not here yet: git -C "+c.Root+" "+strings.Join(c.Fetch, " "))
+	}
+	return append(notes, "reading it as written is one step in that worktree:",
+		"    git -C "+c.Path+" merge --ff-only "+short(c.Commit))
+}
+
+func walkForward(c *catchUp) error {
+	if len(c.Fetch) > 0 {
+		fmt.Printf("  git %s\n", strings.Join(c.Fetch, " "))
+		if out, err := gitIn(c.Root, c.Fetch...); err != nil {
+			return fmt.Errorf("that fetch failed, so nothing moved: %s", gitSaid(out, err))
+		}
+		if !fastForward(c.Root, c.Head, c.Commit) {
+			return fmt.Errorf("%s is not ahead of %s after all, so that worktree stays where it is",
+				short(c.Commit), short(c.Head))
+		}
+	}
+	if out, err := gitIn(c.Path, "merge", "--ff-only", c.Commit); err != nil {
+		return fmt.Errorf("git merge --ff-only: %s", gitSaid(out, err))
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------- the record
 
 // madeWorktree is one directory cw added, and enough about it to remove it

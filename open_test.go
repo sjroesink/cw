@@ -25,17 +25,17 @@ func TestSameCommitComparesEitherWayRound(t *testing.T) {
 // found stays and nothing is offered.
 func TestCheckoutForLeavesThingsAloneWithoutACommit(t *testing.T) {
 	for _, d := range []*SourceView{nil, {}} {
-		root, notes, want := checkoutFor("C:/Projects/Fincent", false, d, nil)
-		if root != "C:/Projects/Fincent" || notes != nil || want != nil {
-			t.Errorf("checkoutFor moved to %q and said %v", root, notes)
+		p := checkoutFor("C:/Projects/Fincent", false, d, nil)
+		if p.Root != "C:/Projects/Fincent" || p.Notes != nil || p.Add != nil || p.Move != nil {
+			t.Errorf("checkoutFor moved to %q and said %v", p.Root, p.Notes)
 		}
 	}
-	if root, notes, _ := checkoutFor("", false, &SourceView{Commit: "abc"}, nil); root != "" || notes != nil {
-		t.Errorf("checkoutFor without a checkout returned %q and %v", root, notes)
+	if p := checkoutFor("", false, &SourceView{Commit: "abc"}, nil); p.Root != "" || p.Notes != nil {
+		t.Errorf("checkoutFor without a checkout returned %q and %v", p.Root, p.Notes)
 	}
 	quiet := func() branchInfo { return branchInfo{Note: "gh is not on this machine"} }
-	if _, notes, want := checkoutFor("C:/Projects/Fincent", false, &SourceView{}, quiet); notes != nil || want != nil {
-		t.Errorf("a branch nobody could name still produced %v", notes)
+	if p := checkoutFor("C:/Projects/Fincent", false, &SourceView{}, quiet); p.Notes != nil || p.Add != nil {
+		t.Errorf("a branch nobody could name still produced %v", p.Notes)
 	}
 }
 
@@ -83,19 +83,20 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 
 	// With nothing checked out on it one is offered, the checkout stays where
 	// it is, and what gh said about the branch is repeated.
-	root, notes, want := checkoutFor(main, false, d, func() branchInfo {
+	p := checkoutFor(main, false, d, func() branchInfo {
 		return branchInfo{Name: "feature/x", Note: "pull request 7 is on branch feature/x"}
 	})
-	if root != main {
-		t.Errorf("moved to %q with no worktree to move to", root)
+	if p.Root != main {
+		t.Errorf("moved to %q with no worktree to move to", p.Root)
 	}
+	want := p.Add
 	if want == nil {
-		t.Fatalf("offered no worktree, and said only:\n%s", strings.Join(notes, "\n"))
+		t.Fatalf("offered no worktree, and said only:\n%s", strings.Join(p.Notes, "\n"))
 	}
 	if want.Commit != first || want.Branch != "feature/x" || len(want.Fetch) != 0 {
 		t.Errorf("offered %+v, and that commit is right here", want)
 	}
-	joined := strings.Join(append(notes, offerNotes(want, d)...), "\n")
+	joined := strings.Join(append(p.Notes, offerNotes(want, d)...), "\n")
 	if !strings.Contains(joined, "git worktree add --detach") {
 		t.Errorf("did not say how to make one by hand:\n%s", joined)
 	}
@@ -109,24 +110,24 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 	// Now there is one, so that is where it reads.
 	side := filepath.Join(dir, "on-the-commit")
 	git(main, "worktree", "add", "--detach", side, first)
-	root, notes, want = checkoutFor(main, false, d, nil)
-	if !samePath(root, side) {
-		t.Fatalf("read against %q, want the worktree at %q", root, side)
+	p = checkoutFor(main, false, d, nil)
+	if !samePath(p.Root, side) {
+		t.Fatalf("read against %q, want the worktree at %q", p.Root, side)
 	}
-	if want != nil {
-		t.Errorf("offered a second worktree at %s with one already on the commit", want.Path)
+	if p.Add != nil || p.Move != nil {
+		t.Errorf("asked for something with a worktree already on the commit: %+v %+v", p.Add, p.Move)
 	}
-	joined = strings.Join(notes, "\n")
+	joined = strings.Join(p.Notes, "\n")
 	if !strings.Contains(joined, "so that is what will be read") {
 		t.Errorf("did not say what it did:\n%s", joined)
 	}
 
 	// Unless the reader named a root themselves, which is not overruled.
-	root, notes, _ = checkoutFor(main, true, d, nil)
-	if root != main {
-		t.Errorf("moved away from the root that was asked for, to %q", root)
+	p = checkoutFor(main, true, d, nil)
+	if p.Root != main {
+		t.Errorf("moved away from the root that was asked for, to %q", p.Root)
 	}
-	if !strings.Contains(strings.Join(notes, "\n"), "would line up better") {
-		t.Errorf("did not mention the worktree:\n%s", strings.Join(notes, "\n"))
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "would line up better") {
+		t.Errorf("did not mention the worktree:\n%s", strings.Join(p.Notes, "\n"))
 	}
 }

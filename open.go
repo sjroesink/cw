@@ -124,9 +124,9 @@ func cmdOpen(args []string) {
 	// found. A worktree already sitting on the right commit is a better answer
 	// than telling somebody to move the branch they are working on, and when
 	// there is no such worktree, making one is offered rather than described.
-	root, notes, want := checkoutFor(f.root, guessed == "" && f.root != "", doc.Source,
+	plan := checkoutFor(f.root, guessed == "" && f.root != "", doc.Source,
 		func() branchInfo { return branchOf(doc.Source, f.root, f.offline) })
-	f.root = root
+	f.root = plan.Root
 
 	fmt.Printf("%s\n  fetched from %s\n", doc.Title, url)
 	if guessed != "" {
@@ -135,13 +135,16 @@ func cmdOpen(args []string) {
 	if f.root == "" {
 		fmt.Printf("  no checkout found, so nothing will be opened or checked. Give one with --root\n")
 	}
-	for _, line := range notes {
+	for _, line := range plan.Notes {
 		fmt.Printf("  %s\n", line)
 	}
-	if want != nil {
-		if added := offerWorktree(want, doc.Source, slug, mode, f.offline); added != "" {
+	switch {
+	case plan.Add != nil:
+		if added := offerWorktree(plan.Add, doc.Source, slug, mode, f.offline); added != "" {
 			f.root = added
 		}
+	case plan.Move != nil:
+		offerCatchUp(plan.Move, mode, f.offline)
 	}
 	fmt.Println()
 
@@ -305,6 +308,15 @@ func remoteNames(dir, want string) bool {
 	return strings.HasSuffix(url, "/"+want) || strings.HasSuffix(url, ":"+want)
 }
 
+// checkoutPlan is what checkoutFor decided: where the walkthrough is going to
+// be read, what to say about that, and at most one thing to ask the reader for.
+type checkoutPlan struct {
+	Root  string   // the checkout to read against
+	Notes []string // what to print about the choice
+	Add   *offer   // a worktree that does not exist yet
+	Move  *catchUp // one that does, on the right branch behind the commit
+}
+
 // checkoutFor works out which of this machine's checkouts to read the
 // walkthrough against, and what to say about the choice.
 //
@@ -324,9 +336,9 @@ func remoteNames(dir, want string) bool {
 // branch is asked for the branch this walkthrough is about, and it is a
 // function rather than a value because answering it can mean a call to a forge.
 // A checkout that already lines up asks nobody anything.
-func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchInfo) (string, []string, *offer) {
+func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchInfo) checkoutPlan {
 	if root == "" || d == nil {
-		return root, nil, nil
+		return checkoutPlan{Root: root}
 	}
 	br, asked := branchInfo{}, false
 	about := func() branchInfo {
@@ -343,7 +355,7 @@ func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchIn
 	if want == "" {
 		want, byBranch = about().Head, true
 		if want == "" {
-			return root, nil, nil
+			return checkoutPlan{Root: root}
 		}
 	}
 
@@ -352,7 +364,7 @@ func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchIn
 		head = strings.TrimSpace(out)
 	}
 	if head == "" || sameCommit(head, want) {
-		return root, nil, nil
+		return checkoutPlan{Root: root}
 	}
 
 	notes := []string{fmt.Sprintf("this was written against %s and the checkout is on %s",
@@ -367,14 +379,23 @@ func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchIn
 	all := worktreesOf(root)
 	if w, why := pickWorktree(all, root, want, about().Name); w.Path != "" {
 		if pinned {
-			return root, append(notes,
-				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why)), nil
+			return checkoutPlan{Root: root, Notes: append(notes,
+				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why))}
 		}
 		notes = append(notes, fmt.Sprintf("a worktree at %s is %s, so that is what will be read", w.Path, why))
-		if !sameCommit(w.Head, want) {
-			notes = append(notes, fmt.Sprintf("it is on %s though, so a snippet may still have moved", short(w.Head)))
+		if sameCommit(w.Head, want) {
+			return checkoutPlan{Root: w.Path, Notes: notes}
 		}
-		return w.Path, notes, nil
+
+		// On the branch but not on the commit, which is the ordinary state of a
+		// worktree somebody made a while ago: the branch moved and it did not.
+		// Nothing new has to be made for that, one step forward is enough.
+		notes = append(notes, fmt.Sprintf("it is on %s though, so a snippet may still have moved", short(w.Head)))
+		move, reason := planCatchUp(root, w, d, want)
+		if reason != "" {
+			notes = append(notes, reason)
+		}
+		return checkoutPlan{Root: w.Path, Notes: notes, Move: move}
 	}
 
 	// Nothing checked out anywhere near it. A new worktree is the way there
@@ -383,7 +404,7 @@ func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchIn
 	if _, err := runIn(root, "git", "cat-file", "-e", want+"^{commit}"); err != nil {
 		o.Fetch = fetchArgs(d)
 	}
-	return root, notes, o
+	return checkoutPlan{Root: root, Notes: notes, Add: o}
 }
 
 func sameCommit(a, b string) bool {

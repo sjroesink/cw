@@ -330,3 +330,110 @@ func TestAWorktreeIsMadeAndGivenBackAgain(t *testing.T) {
 		t.Errorf("still holds on to one after giving it back")
 	}
 }
+
+// A worktree on the right branch at the wrong commit is the ordinary state of
+// one that was made a while ago: the branch moved on and it did not. Nothing
+// new has to be made for that, so what comes back is one step forward rather
+// than a second directory. And it only comes back while there is nothing in
+// there to lose.
+func TestAWorktreeOnTheBranchIsWalkedForward(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git here")
+	}
+	dir := t.TempDir()
+	main := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(main, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git := func(where string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = where
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(main, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Three commits in a line. The worktree sits on the first, the walkthrough
+	// was written against the second, and the checkout being read is on the
+	// third so that it is not the answer itself.
+	git(main, "init", "-b", "main")
+	write("a.txt", "one\n")
+	git(main, "add", ".")
+	git(main, "commit", "-m", "one")
+	first := git(main, "rev-parse", "HEAD")
+	write("a.txt", "two\n")
+	git(main, "commit", "-am", "two")
+	second := git(main, "rev-parse", "HEAD")
+	write("a.txt", "three\n")
+	git(main, "commit", "-am", "three")
+
+	git(main, "branch", "feature/x", first)
+	side := filepath.Join(dir, "on-the-branch")
+	git(main, "worktree", "add", side, "feature/x")
+
+	d := &SourceView{Commit: second, URL: "https://github.com/x/y/pull/7"}
+	branch := func() branchInfo { return branchInfo{Name: "feature/x"} }
+	made = nil
+
+	p := checkoutFor(main, false, d, branch)
+	if !samePath(p.Root, side) {
+		t.Fatalf("read against %q, want the worktree at %q", p.Root, side)
+	}
+	if p.Add != nil {
+		t.Errorf("offered a second worktree at %s with one already on the branch", p.Add.Path)
+	}
+	if p.Move == nil {
+		t.Fatalf("offered no way forward, and said only:\n%s", strings.Join(p.Notes, "\n"))
+	}
+	if p.Move.Commit != second || p.Move.Branch != "feature/x" || len(p.Move.Fetch) != 0 {
+		t.Errorf("offered %+v, and that commit is right here", p.Move)
+	}
+	if !strings.Contains(strings.Join(catchUpNotes(p.Move), "\n"), "merge --ff-only") {
+		t.Errorf("did not say how to do it by hand: %v", catchUpNotes(p.Move))
+	}
+	move := p.Move
+
+	// Work in there, and it stays where it is. Untracked counts: the same
+	// reason a worktree with a stray file in it does not get removed.
+	git(main, "branch", "feature/y", first)
+	other := filepath.Join(dir, "in-use")
+	git(main, "worktree", "add", other, "feature/y")
+	if err := os.WriteFile(filepath.Join(other, "notes.md"), []byte("mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p = checkoutFor(main, false, d, func() branchInfo { return branchInfo{Name: "feature/y"} })
+	if p.Move != nil {
+		t.Errorf("offered to move a worktree with work in it: %+v", p.Move)
+	}
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "work in it") {
+		t.Errorf("did not say why it left it alone:\n%s", strings.Join(p.Notes, "\n"))
+	}
+
+	if err := walkForward(move); err != nil {
+		t.Fatalf("walkForward: %v", err)
+	}
+	if now := git(side, "rev-parse", "HEAD"); now != second {
+		t.Errorf("the worktree is on %s, want %s", short(now), short(second))
+	}
+	// The branch is still checked out there. A reader who goes back to that
+	// worktree tomorrow finds the branch they made it for, further along.
+	if on := git(side, "rev-parse", "--abbrev-ref", "HEAD"); on != "feature/x" {
+		t.Errorf("the worktree came out on %q, and it was on a branch", on)
+	}
+	// It is not this run's to give back, so nothing was written down either.
+	if made != nil {
+		t.Errorf("wrote down a worktree it did not make: %+v", made)
+	}
+}

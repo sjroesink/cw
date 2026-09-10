@@ -48,7 +48,7 @@ Sharing one:
   cw publish <walkthrough.json> [--site URL] [--slug NAME] [--new] [--force]
              [--password PW | --no-password] [--allow CIDR,... | --no-allow]
   cw open <url or name> [--root DIR]    read a published one with the local buttons
-          [--worktree | --no-worktree]  add a worktree for its commit without asking, or never
+          [--worktree | --no-worktree]  add or move a worktree for its commit without asking, or never
   cw worktrees [clean]                  the worktrees cw open added, and removing them
 
 Serving the site rather than one file:

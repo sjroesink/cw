@@ -101,3 +101,11 @@ killed, and nothing outside it is ever a candidate. It never passes `--force` to
 remove`, so one with work in it stays and says so. And the question it asks cannot block: `askYes`
 wants a terminal on both ends and gives up after thirty seconds, because `cw open` waiting on a
 prompt nobody can see never serves the page it was asked for.
+
+Adding one is not the only way to the commit, and the other way is the only thing cw does to a
+checkout it did not make. A worktree on the right branch that is merely behind gets offered a
+fast-forward instead: of the branch that is already checked out there, from a tree with nothing
+uncommitted and nothing untracked in it, onto a commit that is a descendant of where it is.
+`planCatchUp` is where each of those is checked, and a no there is a sentence rather than a
+question. What it moves stays moved. The branch was going to reach that commit anyway, and putting
+it back would be a second change to somebody's checkout rather than one fewer.

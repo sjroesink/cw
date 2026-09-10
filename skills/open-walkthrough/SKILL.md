@@ -48,6 +48,9 @@ It prints a `http://127.0.0.1:<port>/` and opens a browser. Give the person that
 | `this was written against … and the checkout is on …` | Right repository, wrong place in history. What follows says what it did about that. See below |
 | `pull request … is on branch …` | What `gh` said. `which is on … now` means the branch has moved since, so checking the branch out is not the same as reading this |
 | `added the worktree at …` | It made one and is reading there. It removes it again when the server stops |
+| `it is on … though, so a snippet may still have moved` | The worktree is on the right branch but behind. What follows is the one step that fixes it |
+| `that worktree is on … now` | It fast-forwarded the branch that was already checked out there. That one stays put after the server stops |
+| `there is work in it, so it stays where it is` | Somebody is using that worktree. Read it as it is, or ask them |
 | `is protected. Give the password with --password` | Pass `--password`, or set `$env:CW_PASSWORD`. Ask them for it; never guess |
 | `does not allow this machine to read it` | An address restriction. Only whoever published it can change that |
 
@@ -60,7 +63,12 @@ records, asks `gh` which branch the pull request is on when the document does no
 through `git worktree list` for one already on that commit or that branch. Finding one, it reads
 there and says so, and you do nothing.
 
-When there is none, it offers to add one. **Pass `--worktree` or `--no-worktree` rather than
+Finding one that is on the branch but behind the commit, which is the ordinary state of a worktree
+made a while ago, it offers to fast-forward it instead of adding a second one. That is a change to a
+directory the person made themselves, so it happens only from a clean tree and only forwards, and it
+stays after the server stops.
+
+When there is neither, it offers to add one. **Pass `--worktree` or `--no-worktree` rather than
 neither**, because the question is put to a terminal and you are not one:
 
 ```powershell
@@ -68,8 +76,9 @@ neither**, because the question is put to a terminal and you are not one:
 ```
 
 Ask the person first, and say what it costs: a second directory, fetched if the commit is not there
-yet, removed again when they stop the server. It is theirs to say no to, and `--no-worktree` prints
-the `git worktree add` line for them to run by hand instead.
+yet, removed again when they stop the server. A fast-forward costs them less and lasts longer, so
+say which of the two is on the table. Both are theirs to say no to, and `--no-worktree` prints the
+`git worktree add` or `git merge --ff-only` line for them to run by hand instead.
 
 Do not reach for `gh pr checkout`. `cw open` prints it as a last line, but it moves the branch under
 whatever the person is working on, and they may have uncommitted changes. A worktree costs them
