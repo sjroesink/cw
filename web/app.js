@@ -15,7 +15,7 @@ import {
 } from "./ui.js";
 import {
   state, doc, parts, partAt, sectionAt, stepsOf, currentStep, totalSteps, stepsIn,
-  isDone, sectionComplete, partComplete, loadProgress, readHash,
+  isDone, sectionComplete, partComplete, loadProgress, readHash, partKey,
   onChange, go, openStep, markDone, moveLabel, move,
 } from "./state.js";
 import * as comments from "./comments.js";
@@ -159,15 +159,39 @@ function render() {
   window.scrollTo({ top: 0 });
 }
 
+/* The two renderers name what a comment can hang on, with data-anchor and
+   data-kind on everything a reader can select inside. The pages around the
+   steps say it the same way, because a question about which part a change
+   belongs in is asked on the overview, where the parts are next to each other,
+   and not three screens in. */
+function asks(node, name) {
+  node.dataset.anchor = name;
+  node.dataset.kind = "text";
+  return node;
+}
+
+/* A card is a button and a paragraph at once. Clicking it moves, dragging
+   across a few words in it to ask about them does not, and neither does the
+   mark a comment has left on top of it. */
+function opens(node, fn) {
+  node.addEventListener("click", (e) => {
+    if (e.target.closest(".pin, mark.asked")) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && node.contains(sel.anchorNode)) return;
+    fn();
+  });
+  return node;
+}
+
 function viewOverview() {
   const d = doc();
   const v = el("div", "view");
   v.appendChild(el("div", "eyebrow", "This walkthrough has " + plural(parts().length, "part")));
-  if (d.summary) v.appendChild(mdEl("p", "lede", d.summary));
+  if (d.summary) v.appendChild(asks(mdEl("p", "lede", d.summary), "summary"));
 
   const grid = el("div", "cards");
   parts().forEach((p, pi) => {
-    const card = el("button", "card");
+    const card = asks(el("button", "card"), "part-" + partKey(pi));
     card.type = "button";
     const head = el("div", "head");
     head.appendChild(el("span", "no", "part " + pad2(pi + 1)));
@@ -186,7 +210,7 @@ function viewOverview() {
       }
       card.appendChild(chips);
     }
-    card.addEventListener("click", () => go({ view: "part", part: pi, section: null }));
+    opens(card, () => go({ view: "part", part: pi, section: null }));
     grid.appendChild(card);
   });
   v.appendChild(grid);
@@ -266,13 +290,17 @@ function viewPart() {
     { text: "Overview", onClick: () => go({ view: "overview", part: null, section: null }) },
     { text: "part " + pad2(state.part + 1) },
   ]));
-  v.appendChild(el("h2", "part-title", p.title));
+  // The title and what the part says about itself are one thing to ask about,
+  // so they are one anchor rather than two the reader cannot select across.
+  const head = asks(el("div", "part-head"), "intro");
+  head.appendChild(el("h2", "part-title", p.title));
   const intro = R.partIntro(p) || {};
-  if (intro.long) v.appendChild(mdEl("p", "part-long", intro.long));
+  if (intro.long) head.appendChild(mdEl("p", "part-long", intro.long));
+  v.appendChild(head);
 
   const list = el("div", "sections");
   p.sections.forEach((s, si) => {
-    const row = el("button", "section-row");
+    const row = asks(el("button", "section-row"), "section-" + (s.id || si));
     row.type = "button";
     row.appendChild(el("span", "no", pad2(si + 1)));
     const mid = el("span", "mid");
@@ -282,7 +310,7 @@ function viewPart() {
     row.appendChild(mid);
     row.appendChild(el("span", "counts", plural(s.steps.length, "step")));
     row.appendChild(el("span", "arrow", "→"));
-    row.addEventListener("click", () => openStep(state.part, si, 0));
+    opens(row, () => openStep(state.part, si, 0));
     list.appendChild(row);
   });
   v.appendChild(list);

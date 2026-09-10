@@ -49,8 +49,19 @@ export function stepsIn(p) {
 // step happens to sit today. Inserting a step used to move everybody's saved
 // place along by one.
 const idOf = (thing, fallback) => (thing && thing.id) || String(fallback);
+export const partKey = (p) => idOf(partAt(p), p);
 export const key = (p, s, i) =>
-  idOf(partAt(p), p) + "/" + idOf(sectionAt(p, s), s) + "/" + idOf(stepsOf(p, s)[i], i);
+  partKey(p) + "/" + idOf(sectionAt(p, s), s) + "/" + idOf(stepsOf(p, s)[i], i);
+
+/* Which screen is being read, in the same ids as everything else here: the
+   overview is the walkthrough itself and has nothing in front of it, a part
+   page is its part, and a step is the three levels. Anything that hangs off a
+   screen rather than off a step needs that, and a comment is one. */
+export function screenKey() {
+  if (state.view === "part") return partKey(state.part);
+  if (state.view === "step") return key(state.part, state.section, state.step);
+  return "";
+}
 export const isDone = (p, s, i) => state.done.indexOf(key(p, s, i)) !== -1;
 export const sectionComplete = (p, s) => stepsOf(p, s).every((_, i) => isDone(p, s, i));
 export const partComplete = (p) => partAt(p).sections.every((_, s) => sectionComplete(p, s));

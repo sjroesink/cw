@@ -97,7 +97,7 @@ in the background, and leave it running:
 ```
 
 It waits until there is a comment, takes it so the page can show that somebody picked it up, prints
-it and stops. What it prints is the step, the file and the lines they selected, the words
+it and stops. What it prints is the page, the file and the lines they selected, the words
 themselves, and what they asked. That is enough to go and read the code before answering, which is
 the point of being the session with the checkout.
 
@@ -112,8 +112,8 @@ Then start the watch again, and keep doing that until they say to stop or the se
 that comes back with nothing has lost nothing; `--for` only decides how long one turn waits.
 
 The answer is markdown, read in a narrow column, beside the thing they were looking at. Answer what
-they asked and stop. A fenced block when the code is the answer, no headings, and no recap of the
-step they are already reading.
+they asked and stop. A fenced block when the code is the answer, no headings, and no recap of what
+they are already reading.
 
 **Or answer in blocks.** A `.json` file holding an array of cw/2 blocks is drawn by the same
 renderer the walkthrough is drawn with, so a code block gets the file's own line numbers and the

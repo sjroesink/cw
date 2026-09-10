@@ -76,6 +76,12 @@ a reply to that and nothing more, because the rules `inspect2` adds are about a 
 publishes. And nothing removes a comment. Archiving takes it out of the column and out of what a
 watcher is handed; the file is a file, for the day somebody really does want one gone.
 
+A comment hangs on a screen rather than on a step, because which part something belongs in is asked
+on the overview, where the parts are side by side. What `where.step` holds is the address in the
+address bar: the three ids for a step, the part for a part page, and nothing at all for the
+overview. `screenKey` in `state.js` is the one place that decides that, and `where()` in
+`comments.go` is why an empty one still prints as somewhere.
+
 ## The format is versioned, and other people may read it
 
 `cw/2` is what a new walkthrough is written as, and `cw/1` is still read, still published and still

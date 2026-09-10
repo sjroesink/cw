@@ -1055,6 +1055,12 @@ body.resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 6px 18px oklch(0 0 0 / 0.22);
 }
 
+/* A card on the overview and a row on a part page are buttons, and a browser
+   does not hand out the text inside a button unless it is asked to. They are
+   also the only prose on those pages, so without this there is nothing there
+   to select and nothing to ask about. */
+.card, .section-row { user-select: text; -webkit-user-select: text; }
+
 /* What was selected, put back. Amber rather than the accent, because the
    accent already means a highlight the author wrote. */
 .lines .row.asked { background: oklch(0.62 0.12 90 / 0.18); box-shadow: inset 2px 0 0 oklch(0.75 0.13 85); }

@@ -10,7 +10,9 @@
    answer, and the routes are not registered. */
 
 import { HOSTED, STAMP, $, el, api, toast, mdBlock, copyText } from "./ui.js";
-import { state, parts, stepsOf, key as routeOf, currentStep, go } from "./state.js";
+import {
+  state, doc, parts, partAt, stepsOf, key as routeOf, partKey, screenKey, currentStep, go,
+} from "./state.js";
 
 let view = { rev: -1, watching: false, prompt: "", threads: [] };
 let draft = null; // the selection being written about, until it is sent or dropped
@@ -107,8 +109,8 @@ async function reload() {
   }
   const now = answeredIn(view.threads);
   for (const t of view.threads) {
-    if (now.has(t.id) && !answered.has(t.id) && !onThisStep(t)) {
-      toast("an answer came back on " + (t.where.title || "another step"));
+    if (now.has(t.id) && !answered.has(t.id) && !onThisScreen(t)) {
+      toast("an answer came back on " + (t.where.title || "another page"));
       break;
     }
   }
@@ -117,10 +119,23 @@ async function reload() {
 }
 
 const answeredIn = (threads) => new Set((threads || []).filter((t) => t.status === "answered").map((t) => t.id));
-const onThisStep = (t) => state.view === "step" && t.where.step === here();
-const here = () => routeOf(state.part, state.section, state.step);
+
+/* A comment hangs on the screen it was left on, and the overview and the part
+   pages are screens like any other: the question of which part a change belongs
+   in is asked where the parts are next to each other. So this is the address of
+   what is being read rather than of the step somebody was on last. */
+const here = () => screenKey();
+const onThisScreen = (t) => t.where.step === here();
 const live = (t) => showArchived || !t.archived;
-const mine = () => view.threads.filter((t) => onThisStep(t) && live(t));
+const mine = () => view.threads.filter((t) => onThisScreen(t) && live(t));
+
+// What the screen is called: for the line above a card, and for the terminal
+// the question comes out in.
+function titleHere() {
+  if (state.view === "step") return (currentStep() || {}).title || "";
+  if (state.view === "part") return (partAt(state.part) || {}).title || "";
+  return doc().title || "";
+}
 
 /* ------------------------------------------------------------------ the page */
 
@@ -228,16 +243,15 @@ function drawColumn() {
   const here = mine();
   for (const t of here) list.appendChild(card(t));
 
-  const others = view.threads.filter((t) => !onThisStep(t) && live(t));
+  const others = view.threads.filter((t) => !onThisScreen(t) && live(t));
   if (!here.length && !others.length) {
     list.appendChild(el("p", "empty", state.view === "step"
       ? "Select a few lines of code or half a sentence, and press comment."
-      : "Open a step to leave a comment on what is in it."));
+      : "Select a few words of what is on this page, and press comment."));
     return;
   }
   if (!others.length) return;
-  list.appendChild(el("div", "elsewhere",
-    state.view === "step" ? "asked on another step" : "asked in this walkthrough"));
+  list.appendChild(el("div", "elsewhere", "asked elsewhere in this walkthrough"));
   for (const t of others) list.appendChild(rowFor(t));
 }
 
@@ -267,9 +281,9 @@ function rowFor(t) {
   row.appendChild(el("span", "state " + t.status, t.status));
   row.appendChild(el("span", "msg-one", t.messages[0] ? t.messages[0].text : ""));
   row.addEventListener("click", () => {
-    const at = stepAt(t.where.step);
+    const at = screenAt(t.where.step);
     opened = t.id;
-    if (at) go(Object.assign({ view: "step", ui: {} }, at));
+    if (at) go(Object.assign({ ui: {} }, at));
   });
   return row;
 }
@@ -423,7 +437,7 @@ function place(t) {
     if (l) return t.where.file + " " + l.start;
     return t.where.file;
   }
-  return t.where.title || "this step";
+  return t.where.title || "this page";
 }
 
 /* -------------------------------------------------------------- the marks */
@@ -599,10 +613,9 @@ function startDraft() {
 function whereOf(pick) {
   const host = pick.host;
   const kind = host.dataset.kind || "text";
-  const step = currentStep();
   const w = {
     step: here(),
-    title: (step && step.title) || "",
+    title: titleHere(),
     block: host.dataset.anchor || "",
     kind,
     quote: pick.text.slice(0, 4000),
@@ -676,14 +689,16 @@ function close() {
   drawColumn();
 }
 
-// Where a thread's step sits now. Ids are what a link hangs off, so a step that
+// Which screen a thread sits on now. Ids are what a link hangs off, so one that
 // moved is still found and one that was cut is not guessed at.
-function stepAt(route) {
+function screenAt(route) {
+  if (!route) return { view: "overview", part: null, section: null };
   const ps = parts();
   for (let p = 0; p < ps.length; p++) {
+    if (partKey(p) === route) return { view: "part", part: p, section: null };
     for (let s = 0; s < ps[p].sections.length; s++) {
       for (let i = 0; i < stepsOf(p, s).length; i++) {
-        if (routeOf(p, s, i) === route) return { part: p, section: s, step: i };
+        if (routeOf(p, s, i) === route) return { view: "step", part: p, section: s, step: i };
       }
     }
   }

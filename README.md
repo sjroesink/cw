@@ -84,10 +84,11 @@ a killed run left behind.
 
 A walkthrough being served locally can be asked questions. Select a few lines of code or half a
 sentence of prose, leave a comment, and it appears in a column beside the text with the words it
-is about still marked in place.
+is about still marked in place. Every screen takes them, the overview and the part pages as much as
+a step, because which part something belongs in is asked where the parts are side by side.
 
 `cw comments watch` in the terminal next to it waits until there is one, takes it, and prints
-where it hangs: the step, the file and the lines. The page says that somebody picked it up while
+where it hangs: the page, the file and the lines. The page says that somebody picked it up while
 it is being written, and shows the answer when `cw comments reply` sends it back. When nothing is
 listening the page says that too, and offers the prompt to paste into an agent.
 
