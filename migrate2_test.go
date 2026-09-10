@@ -339,3 +339,30 @@ func TestATruncatedIdSaysSoOutLoud(t *testing.T) {
 		t.Errorf("a title that fits was reported anyway:\n%s", strings.Join(quiet, "\n"))
 	}
 }
+
+// An id that is already in the file is kept exactly as it is, and nothing is
+// said about it, because there is nothing for anybody to check. A published
+// walkthrough has been through EnsureIDs, so its ids were already cut to fit at
+// cw/1 time: the lift does not cut them again and does not rename them.
+func TestAnIdThatIsAlreadyThereIsLeftAlone(t *testing.T) {
+	long := "And the environment provider is kept, not replaced, when the host restarts"
+	already := slug(long)
+	if len(already) != idLimit {
+		t.Fatalf("the fixture is meant to sit on the limit, and %q is %d", already, len(already))
+	}
+
+	d := &Doc{Version: FormatV1, Title: "t", Parts: []Part{{
+		ID: "a-part", Title: "One", Sections: []Section{{
+			ID: "a-section", Title: "Two",
+			Steps: []Step{{ID: already, Title: long, Body: "Prose."}},
+		}},
+	}}}
+
+	out, todo := LiftToV2(d, LiftOptions{})
+	if got := out.Parts[0].Sections[0].Steps[0].ID; got != already {
+		t.Errorf("the id changed from %q to %q, which loses every reader's place", already, got)
+	}
+	if said := strings.Join(todo, "\n"); strings.Contains(said, "cut to") {
+		t.Errorf("an id that was not cut was reported as cut:\n%s", said)
+	}
+}

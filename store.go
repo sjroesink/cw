@@ -71,8 +71,11 @@ type Meta struct {
 	Publisher string `json:"publisher,omitempty"`
 	Steps     int    `json:"steps"`
 	// Format is which version of the walkthrough format doc.json is written in.
-	// The listing and cw open want to know without opening it, and a store that
-	// holds two formats and records neither can only find out by guessing.
+	// Nothing on this server reads it. It goes out in the listing, where the
+	// thing that cares is an agent deciding whether a walkthrough is worth
+	// migrating, and a store holding two formats and recording neither can only
+	// answer that by opening every document. Absent means it was published
+	// before the field existed, not that the format is unknown.
 	Format string `json:"format,omitempty"`
 	// Locked says the walkthrough asks something of a reader before it opens.
 	// It is a fact about the page, not a secret, and it is what keeps a
