@@ -98,6 +98,8 @@ cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an err
 cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
            [--password PW | --no-password] [--allow CIDR,... | --no-allow]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
+        [--worktree | --no-worktree]       add a worktree for its commit without asking, or never
+cw worktrees [clean]                       the worktrees cw open added, and removing them
 cw migrate <walkthrough.json> [--to cw/2]  fill in what can be worked out, or lift a cw/1 file
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine

@@ -83,3 +83,15 @@ It has no working tree and no editor. So there is no `/api/open`, no live snippe
 freshness of the code is whatever the publisher's tree said, stored per snippet in `check` and in
 aggregate in `meta.verified`. Anything tempting a hosted page into reaching onto a reader's machine
 belongs in `cw open` instead, which pulls the walkthrough down to where the code already is.
+
+## A worktree is borrowed, never taken
+
+`cw open` can add a worktree so a walkthrough is read at the commit it was written against, and
+`worktree.go` is the only place that touches anybody's checkout. Three rules hold it together.
+
+It removes only what it added, which is why every one goes into `worktrees.json` beside the settings
+the moment it is made: that record is what `cw worktrees clean` works from after a run that was
+killed, and nothing outside it is ever a candidate. It never passes `--force` to `git worktree
+remove`, so one with work in it stays and says so. And the question it asks cannot block: `askYes`
+wants a terminal on both ends and gives up after thirty seconds, because `cw open` waiting on a
+prompt nobody can see never serves the page it was asked for.

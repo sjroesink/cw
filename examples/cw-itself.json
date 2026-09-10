@@ -98,10 +98,11 @@
               "body": "Progress and every deep link hang off the ids in the document. Two siblings with the same id means a link lands on whichever one the reader's browser happened to find first, which is why this is an error rather than a warning.",
               "code": {
                 "file": "doc.go",
-                "from": 170,
-                "text": "\t}\n\tif len(d.Parts) > 6 {\n\t\twarnf(\"%d parts. The overview is a set of cards to choose from, not a list to scroll\", len(d.Parts))\n\t}\n\n\t// An id is what a reader's progress and every deep link hang off, so two of\n\t// them in one place is worse than none: it silently sends people to the\n\t// wrong step.\n\tpartIDs := map[string]bool{}\n\tunique := func(seen map[string]bool, id, at string) {\n\t\tif id == \"\" {",
+                "from": 175,
+                "text": "\t// An id is what a reader's progress and every deep link hang off, so two of\n\t// them in one place is worse than none: it silently sends people to the\n\t// wrong step.\n\tpartIDs := map[string]bool{}\n\tunique := func(seen map[string]bool, id, at string) {\n\t\tif id == \"\" {\n\t\t\treturn\n\t\t}\n\t\tif seen[id] {\n\t\t\terrf(\"%s: the id %q is already taken at this level, so a link to it is ambiguous\", at, id)\n\t\t}\n\t\tseen[id] = true\n\t}",
                 "hi": [
-                  176
+                  183,
+                  184
                 ]
               }
             }
@@ -128,11 +129,11 @@
               "body": "A server on localhost can be reached by any site you have open. So the origin has to be this loopback server, and the caller has to know the token that was stamped into the page when it was served. Only then does anything get read.",
               "code": {
                 "file": "main.go",
-                "from": 623,
-                "text": "\t}\n\tif len(res.Warnings) > 0 {\n\t\tfmt.Printf(\"\\n%d warning(s):\\n\", len(res.Warnings))\n\t\tfor _, w := range res.Warnings {\n\t\t\tfmt.Printf(\"  - %s\\n\", w)\n\t\t}\n\t}\n\tfmt.Printf(\"\\nctrl-c to stop\\n\")\n\n\tif settings.OpenBrowser && !f.noOpen {\n\t\tgo func() {\n\t\t\ttime.Sleep(180 * time.Millisecond)\n\t\t\t_ = openURL(url)",
+                "from": 762,
+                "text": "// guard keeps another page in the browser from driving this server. Everything\n// under /api needs the token the page was served with, and a cross-origin\n// caller is turned away before anything is read or opened.\nfunc (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}",
                 "hi": [
-                  625,
-                  629
+                  764,
+                  768
                 ]
               }
             },
@@ -174,10 +175,11 @@
               "body": "Code that shifted down because something was inserted above it is still the code the walkthrough describes. Code that is gone is not. The page shows the two differently, and the count in the banner only holds the second.",
               "code": {
                 "file": "doc.go",
-                "from": 118,
-                "text": "}\n\ntype LineNote struct {\n\tLine int    `json:\"line\"`\n\tText string `json:\"text\"`\n}\n\ntype Diff struct {\n\tFile  string     `json:\"file\"`\n\tFrom  int        `json:\"from,omitempty\"`",
+                "from": 355,
+                "text": "func (t *Tree) Verify(w *Walkthrough) (checked, moved, stale int) {\n\tat := time.Now()\n\trevision, dirty := t.state()\n\tfor _, s := range w.Snippets {\n\t\tc := t.find(s.File, s.Text, s.From)\n\t\ts.Set(Verdict{Check: c, At: at, Revision: revision, Dirty: dirty})\n\t\tchecked++\n\t\tswitch c.State {\n\t\tcase \"ok\", \"unchecked\":\n\t\tcase \"moved\":\n\t\t\tmoved++\n\t\tdefault:\n\t\t\tstale++\n\t\t}\n\t}\n\treturn checked, moved, stale",
                 "hi": [
-                  122
+                  364,
+                  366
                 ]
               }
             }
@@ -206,11 +208,11 @@
               "callout": "--force does not hide anything: the page says which snippets were already out of date when it was published.",
               "code": {
                 "file": "publish.go",
-                "from": 109,
-                "text": "\t\t\t\tdie(\"give one walkthrough file, got %q and %q\", f.file, a)\n\t\t\t}\n\t\t\tf.file = a\n\t\t}\n\t}\n\tif f.file == \"\" {\n\t\tdie(\"give a walkthrough file\")\n\t}\n\tf.site = strings.TrimRight(f.site, \"/\")\n\t// A password on a command line ends up in shell history, so the\n\t// environment is the better way in and is read when no flag was given.\n\tif f.password == nil {\n\t\tif v, set := os.LookupEnv(\"CW_PASSWORD\"); set {\n\t\t\tf.password = &v",
+                "from": 146,
+                "text": "\troot := resolveRoot(flags{file: f.file, root: f.root}, view.RootHint)\n\ttree := &Tree{Root: root}\n\tchecked, moved, stale := tree.Verify(view)\n\tif root == \"\" {\n\t\tfmt.Fprintf(os.Stderr, \"cw: no working tree was found, so the snippets were not checked. \"+\n\t\t\t\"The page will say the code is unverified.\\n\")\n\t}\n\tif stale > 0 && !f.force {\n\t\tfmt.Fprintf(os.Stderr, \"cw: %d snippet(s) are no longer in the working tree. Run cw check to see which, \"+\n\t\t\t\"fix them, or publish with --force to say it out loud on the page.\\n\", stale)\n\t\tos.Exit(1)\n\t}\n",
                 "hi": [
-                  113,
-                  118
+                  153,
+                  156
                 ]
               }
             },
@@ -219,11 +221,11 @@
               "body": "By the time a document is stored it has an id on every part, section and step and a hash on every snippet. An author never writes those, and a consumer can always rely on them being there.",
               "code": {
                 "file": "api.go",
-                "from": 155,
-                "text": "\t}\n\tif env.Allow != nil && len(*env.Allow) > 0 {\n\t\tif _, err := parseNets(*env.Allow); err != nil {\n\t\t\th.fail(w, http.StatusBadRequest, \"%v\", err)\n\t\t\treturn\n\t\t}",
+                "from": 213,
+                "text": "\tswitch {\n\tcase view.V1 != nil:\n\t\tview.V1.Schema = base + \"/schema/v1.json\"\n\t\tEnsureIDs(view.V1)\n\t\tEnsureAnchors(view.V1)\n\tcase view.V2 != nil:\n\t\tview.V2.Schema = base + \"/schema/v2.json\"\n\t\tEnsureAnchors2(view.V2)\n\t}",
                 "hi": [
-                  158,
-                  159
+                  216,
+                  217
                 ]
               }
             }

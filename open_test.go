@@ -4,139 +4,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
-
-// The porcelain form as git prints it, with a detached worktree and a bare
-// clone in it, because both are shapes that have no branch to match on.
-const worktreeList = `worktree C:/Projects/Fincent
-HEAD 68fa333fabff85b525288338c941c54eade957c3
-branch refs/heads/feature/FIN-7899-wallboard-pool-panel
-
-worktree C:/Projects/Fincent/.claude/worktrees/maintenance-per-env
-HEAD c0085c82f84693e75288fc564c951907e1520f63
-branch refs/heads/worktree-maintenance-per-env
-
-worktree C:/Users/somebody/.claude-worktrees/Fincent/pr-4164
-HEAD 144da9aa073bdb720c1b9a271504b0e9ec4ea627
-detached
-
-worktree C:/Projects/Fincent-mirror
-bare
-`
-
-func TestParseWorktrees(t *testing.T) {
-	all := parseWorktrees(worktreeList)
-	if len(all) != 4 {
-		t.Fatalf("parsed %d worktrees, want 4", len(all))
-	}
-	if all[0].Branch != "feature/FIN-7899-wallboard-pool-panel" {
-		t.Errorf("the branch came out as %q", all[0].Branch)
-	}
-	if all[2].Branch != "" || all[2].Head != "144da9aa073bdb720c1b9a271504b0e9ec4ea627" {
-		t.Errorf("a detached worktree came out as %+v", all[2])
-	}
-	if !all[3].Bare {
-		t.Errorf("the bare clone did not come out bare: %+v", all[3])
-	}
-	if all[0].Path != filepath.Clean("C:/Projects/Fincent") {
-		t.Errorf("the path came out as %q", all[0].Path)
-	}
-}
-
-// Being on exactly the commit beats being on the branch, because a branch that
-// has moved on since is how the snippets drift in the first place.
-func TestPickWorktreePrefersTheCommitOverTheBranch(t *testing.T) {
-	all := parseWorktrees(worktreeList)
-	root := "C:/Projects/Fincent"
-
-	w, why := pickWorktree(all, root, "144da9aa073bdb720c1b9a271504b0e9ec4ea627", "worktree-maintenance-per-env")
-	if w.Path != filepath.Clean("C:/Users/somebody/.claude-worktrees/Fincent/pr-4164") {
-		t.Fatalf("picked %q, want the one on the commit", w.Path)
-	}
-	if why != "on 144da9a" {
-		t.Errorf("said %q", why)
-	}
-
-	// No worktree on that commit, so the branch is the next best thing.
-	w, why = pickWorktree(all, root, "0000000000000000000000000000000000000000", "worktree-maintenance-per-env")
-	if w.Path != filepath.Clean("C:/Projects/Fincent/.claude/worktrees/maintenance-per-env") {
-		t.Fatalf("picked %q, want the one on the branch", w.Path)
-	}
-	if why != "on worktree-maintenance-per-env" {
-		t.Errorf("said %q", why)
-	}
-
-	// Neither, so nothing. Suggesting a checkout that is on neither the commit
-	// nor the branch would be worse than saying there is none.
-	if w, _ := pickWorktree(all, root, "0000000", "no-such-branch"); w.Path != "" {
-		t.Errorf("picked %q with nothing to match on", w.Path)
-	}
-}
-
-// The checkout being read already is never the answer to being on the wrong
-// commit, and a bare clone has no files to read at all.
-func TestPickWorktreeSkipsTheCheckoutItselfAndBareOnes(t *testing.T) {
-	all := parseWorktrees(worktreeList)
-	if w, _ := pickWorktree(all, "C:/Projects/Fincent", "68fa333", ""); w.Path != "" {
-		t.Errorf("picked %q, which is the checkout it was called about", w.Path)
-	}
-	if runtime.GOOS == "windows" {
-		if w, _ := pickWorktree(all, `C:\Projects\fincent`, "68fa333", ""); w.Path != "" {
-			t.Errorf("picked %q: the same checkout written in another case", w.Path)
-		}
-	}
-	if w, _ := pickWorktree([]worktree{{Path: "C:/x", Bare: true, Head: "abc1234"}}, "C:/root", "abc1234", ""); w.Path != "" {
-		t.Errorf("picked the bare clone at %q", w.Path)
-	}
-}
-
-func TestNewWorktreePathFollowsWhereTheyAlreadyLive(t *testing.T) {
-	d := &SourceView{
-		Commit: "144da9aa073bdb720c1b9a271504b0e9ec4ea627",
-		URL:    "https://github.com/innovadis-dev/Fincent/pull/4164",
-	}
-	root := "C:/Projects/Fincent"
-
-	// Two of the three linked worktrees live under the same directory, so a new
-	// one goes there too, named after the pull request.
-	all := parseWorktrees(worktreeList + `
-worktree C:/Projects/Fincent/.claude/worktrees/another
-HEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-branch refs/heads/another
-`)
-	want := filepath.Join("C:/Projects/Fincent/.claude/worktrees", "pr-4164")
-	if got := newWorktreePath(root, all, d); got != want {
-		t.Errorf("newWorktreePath = %q, want %q", got, want)
-	}
-
-	// No worktrees at all: beside the checkout, and then the name has to carry
-	// the repository as well, because that directory holds everything.
-	only := parseWorktrees("worktree C:/Projects/Fincent\nHEAD 68fa333\nbranch refs/heads/main\n")
-	want = filepath.Join("C:/Projects", "Fincent-pr-4164")
-	if got := newWorktreePath(root, only, d); got != want {
-		t.Errorf("newWorktreePath without any worktrees = %q, want %q", got, want)
-	}
-
-	// Not a pull request, so the commit names it.
-	d.URL = "https://github.com/innovadis-dev/Fincent"
-	want = filepath.Join("C:/Projects", "Fincent-144da9a")
-	if got := newWorktreePath(root, only, d); got != want {
-		t.Errorf("newWorktreePath outside a pull request = %q, want %q", got, want)
-	}
-}
-
-func TestFetchCommandUsesThePullRequestRef(t *testing.T) {
-	pr := &SourceView{URL: "https://github.com/innovadis-dev/Fincent/pull/4164"}
-	if got := fetchCommand(pr); got != "git fetch origin pull/4164/head" {
-		t.Errorf("fetchCommand for a pull request = %q", got)
-	}
-	if got := fetchCommand(&SourceView{URL: ""}); got != "git fetch" {
-		t.Errorf("fetchCommand outside a pull request = %q", got)
-	}
-}
 
 func TestSameCommitComparesEitherWayRound(t *testing.T) {
 	full := "144da9aa073bdb720c1b9a271504b0e9ec4ea627"
@@ -151,16 +21,21 @@ func TestSameCommitComparesEitherWayRound(t *testing.T) {
 }
 
 // A walkthrough without a commit says nothing about where it should be read,
-// so the checkout that was found stays.
+// and neither does a forge that has nothing to add, so the checkout that was
+// found stays and nothing is offered.
 func TestCheckoutForLeavesThingsAloneWithoutACommit(t *testing.T) {
 	for _, d := range []*SourceView{nil, {}} {
-		root, notes := checkoutFor("C:/Projects/Fincent", false, d)
-		if root != "C:/Projects/Fincent" || notes != nil {
+		root, notes, want := checkoutFor("C:/Projects/Fincent", false, d, nil)
+		if root != "C:/Projects/Fincent" || notes != nil || want != nil {
 			t.Errorf("checkoutFor moved to %q and said %v", root, notes)
 		}
 	}
-	if root, notes := checkoutFor("", false, &SourceView{Commit: "abc"}); root != "" || notes != nil {
+	if root, notes, _ := checkoutFor("", false, &SourceView{Commit: "abc"}, nil); root != "" || notes != nil {
 		t.Errorf("checkoutFor without a checkout returned %q and %v", root, notes)
+	}
+	quiet := func() branchInfo { return branchInfo{Note: "gh is not on this machine"} }
+	if _, notes, want := checkoutFor("C:/Projects/Fincent", false, &SourceView{}, quiet); notes != nil || want != nil {
+		t.Errorf("a branch nobody could name still produced %v", notes)
 	}
 }
 
@@ -206,15 +81,26 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 
 	d := &SourceView{Commit: first, URL: "https://github.com/x/y/pull/7"}
 
-	// With nothing checked out on it, the way to get there is printed and the
-	// checkout stays where it is.
-	root, notes := checkoutFor(main, false, d)
+	// With nothing checked out on it one is offered, the checkout stays where
+	// it is, and what gh said about the branch is repeated.
+	root, notes, want := checkoutFor(main, false, d, func() branchInfo {
+		return branchInfo{Name: "feature/x", Note: "pull request 7 is on branch feature/x"}
+	})
 	if root != main {
 		t.Errorf("moved to %q with no worktree to move to", root)
 	}
-	joined := strings.Join(notes, "\n")
+	if want == nil {
+		t.Fatalf("offered no worktree, and said only:\n%s", strings.Join(notes, "\n"))
+	}
+	if want.Commit != first || want.Branch != "feature/x" || len(want.Fetch) != 0 {
+		t.Errorf("offered %+v, and that commit is right here", want)
+	}
+	joined := strings.Join(append(notes, offerNotes(want, d)...), "\n")
 	if !strings.Contains(joined, "git worktree add --detach") {
-		t.Errorf("did not suggest a worktree:\n%s", joined)
+		t.Errorf("did not say how to make one by hand:\n%s", joined)
+	}
+	if !strings.Contains(joined, "pull request 7 is on branch feature/x") {
+		t.Errorf("kept what gh said to itself:\n%s", joined)
 	}
 	if strings.Contains(joined, "not here yet") {
 		t.Errorf("asked for a fetch of a commit that is right there:\n%s", joined)
@@ -223,9 +109,12 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 	// Now there is one, so that is where it reads.
 	side := filepath.Join(dir, "on-the-commit")
 	git(main, "worktree", "add", "--detach", side, first)
-	root, notes = checkoutFor(main, false, d)
+	root, notes, want = checkoutFor(main, false, d, nil)
 	if !samePath(root, side) {
 		t.Fatalf("read against %q, want the worktree at %q", root, side)
+	}
+	if want != nil {
+		t.Errorf("offered a second worktree at %s with one already on the commit", want.Path)
 	}
 	joined = strings.Join(notes, "\n")
 	if !strings.Contains(joined, "so that is what will be read") {
@@ -233,7 +122,7 @@ func TestCheckoutForFindsTheWorktreeOnTheCommit(t *testing.T) {
 	}
 
 	// Unless the reader named a root themselves, which is not overruled.
-	root, notes = checkoutFor(main, true, d)
+	root, notes, _ = checkoutFor(main, true, d, nil)
 	if root != main {
 		t.Errorf("moved away from the root that was asked for, to %q", root)
 	}

@@ -20,6 +20,8 @@ cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
 cw check <walkthrough.json> [--root DIR]   validate and verify, exit 1 on an error
 cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
+        [--worktree | --no-worktree]       add a worktree for its commit without asking, or never
+cw worktrees [clean]                       the worktrees cw open added, and removing them
 cw migrate <walkthrough.json> [--to cw/2]  fill in ids and anchors, or lift a cw/1 file
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine
@@ -52,6 +54,14 @@ is how to check a rule before it locks somebody out.
 `serve` opens a browser on 127.0.0.1. Without `--root` the root is `root` from the walkthrough, else
 the git root the file sits in. Without any root the page still reads: the open buttons say so and
 nothing is checked against a tree.
+
+`open` pulls a published walkthrough down and serves it the same way, so the buttons and the snippet
+check come back. It looks for the checkout the walkthrough is about, and when that checkout sits
+somewhere else in history it asks `gh` which branch the pull request is on and looks whether that
+commit or that branch is already in a worktree. When neither is, it offers to add one, reads the
+walkthrough there, and gives it back when the server stops. `--worktree` and `--no-worktree` answer
+that question up front, which is what a script wants. A worktree with work in it is never removed,
+and `cw worktrees` is what finds the ones a killed run left behind.
 
 ## The format
 

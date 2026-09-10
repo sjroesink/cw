@@ -128,7 +128,7 @@ WALKTHROUGH = {
                                 "with the same id means a link lands on whichever one the reader's browser "
                                 "happened to find first, which is why this is an error rather than a warning."
                             ),
-                            "code": code("doc.go", 170, 180, hi=[176]),
+                            "code": code("doc.go", 175, 187, hi=[183, 184]),
                         },
                     ],
                 },
@@ -155,7 +155,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 623, 635, hi=[625, 629]),
+                            "code": code("main.go", 762, 774, hi=[764, 768]),
                         },
                         {
                             "title": "A path is checked, not cleaned",
@@ -189,7 +189,7 @@ WALKTHROUGH = {
                                 "code the walkthrough describes. Code that is gone is not. The page shows the "
                                 "two differently, and the count in the banner only holds the second."
                             ),
-                            "code": code("doc.go", 118, 127, hi=[122]),
+                            "code": code("doc.go", 355, 370, hi=[364, 366]),
                         },
                     ],
                 },
@@ -217,7 +217,7 @@ WALKTHROUGH = {
                                 "quietly, and --force is how you say you meant it."
                             ),
                             "callout": "--force does not hide anything: the page says which snippets were already out of date when it was published.",
-                            "code": code("publish.go", 109, 122, hi=[113, 118]),
+                            "code": code("publish.go", 146, 158, hi=[153, 156]),
                         },
                         {
                             "title": "Ids and anchors are filled in, not typed",
@@ -226,7 +226,7 @@ WALKTHROUGH = {
                                 "and a hash on every snippet. An author never writes those, and a consumer can "
                                 "always rely on them being there."
                             ),
-                            "code": code("api.go", 155, 160, hi=[158, 159]),
+                            "code": code("api.go", 213, 221, hi=[216, 217]),
                         },
                     ],
                 },

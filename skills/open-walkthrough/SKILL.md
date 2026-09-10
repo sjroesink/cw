@@ -45,7 +45,9 @@ It prints a `http://127.0.0.1:<port>/` and opens a browser. Give the person that
 | `found the checkout at …` | It matched `source.repo` against the origin remote of a directory it found. Nothing to do |
 | `no checkout found` | It could not find the repository on this machine. Ask where it is and pass `--root <path>` |
 | `a worktree at … is on …, so that is what will be read` | It found a checkout already sitting on the right commit and used that one. Nothing to do |
-| `this was written against … and the checkout is on …` | Right repository, wrong place in history, and no worktree for it. See below |
+| `this was written against … and the checkout is on …` | Right repository, wrong place in history. What follows says what it did about that. See below |
+| `pull request … is on branch …` | What `gh` said. `which is on … now` means the branch has moved since, so checking the branch out is not the same as reading this |
+| `added the worktree at …` | It made one and is reading there. It removes it again when the server stops |
 | `is protected. Give the password with --password` | Pass `--password`, or set `$env:CW_PASSWORD`. Ask them for it; never guess |
 | `does not allow this machine to read it` | An address restriction. Only whoever published it can change that |
 
@@ -53,25 +55,30 @@ It prints a `http://127.0.0.1:<port>/` and opens a browser. Give the person that
 against a different one and most snippets report as moved or gone, which reads as the walkthrough
 being broken rather than the checkout being elsewhere in history.
 
-`cw open` handles the good case on its own: it looks through `git worktree list` and, if one of them
-is already on that commit or on the branch, reads there instead and says so. You do nothing.
+`cw open` works that out on its own. It compares the checkout against the commit the walkthrough
+records, asks `gh` which branch the pull request is on when the document does not say, and looks
+through `git worktree list` for one already on that commit or that branch. Finding one, it reads
+there and says so, and you do nothing.
 
-When there is none it prints the command for a new one, which is the part to act on:
+When there is none, it offers to add one. **Pass `--worktree` or `--no-worktree` rather than
+neither**, because the question is put to a terminal and you are not one:
 
 ```powershell
-git worktree add --detach C:\Users\you\.claude-worktrees\Fincent\pr-4164 144da9a
+& "$env:USERPROFILE\.claude\skills\code-walkthrough\cw.ps1" open https://cw.roesink.dev/w/fincent-pr-4164 --worktree
 ```
 
-Ask first, then run exactly what it printed, then run `cw open` again. The second run finds the
-worktree by itself, so no `--root` is needed. The path it suggests follows wherever that repository
-already keeps its worktrees, and `--detach` puts it on the commit the walkthrough was written
-against rather than on a branch that has moved on since.
+Ask the person first, and say what it costs: a second directory, fetched if the commit is not there
+yet, removed again when they stop the server. It is theirs to say no to, and `--no-worktree` prints
+the `git worktree add` line for them to run by hand instead.
 
 Do not reach for `gh pr checkout`. `cw open` prints it as a last line, but it moves the branch under
 whatever the person is working on, and they may have uncommitted changes. A worktree costs them
-nothing. Only offer it if they say they would rather not have another directory.
+nothing.
 
-If the commit is not in the object store yet, `cw open` says so and gives the fetch to run first.
+**5. Leave nothing behind.** The worktree goes when the server is stopped with ctrl-c. A kill, a
+crash or a closed laptop skips that, and then `cw worktrees` lists what is still there and
+`cw worktrees clean` removes it. One with changes in it is kept, on purpose: somebody started
+working in there. Say that rather than reaching for `--force`, which this deliberately does not do.
 
 ## What they get that the link does not give them
 

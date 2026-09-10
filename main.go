@@ -14,10 +14,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -46,6 +48,8 @@ Sharing one:
   cw publish <walkthrough.json> [--site URL] [--slug NAME] [--new] [--force]
              [--password PW | --no-password] [--allow CIDR,... | --no-allow]
   cw open <url or name> [--root DIR]    read a published one with the local buttons
+          [--worktree | --no-worktree]  add a worktree for its commit without asking, or never
+  cw worktrees [clean]                  the worktrees cw open added, and removing them
 
 Serving the site rather than one file:
   cw host [--addr :8080] [--data DIR] [--base-url URL]
@@ -79,6 +83,8 @@ func main() {
 		cmdPublish(os.Args[2:])
 	case "open":
 		cmdOpen(os.Args[2:])
+	case "worktrees":
+		cmdWorktrees(os.Args[2:])
 	case "schema":
 		cmdSchema(os.Args[2:])
 	case "ides":
@@ -155,6 +161,9 @@ func atoiOr(s string, def int) int {
 
 func die(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "cw: "+format+"\n", a...)
+	// Giving up is one of the ways a run ends, so a worktree this one added is
+	// handed back here too. Every run that added none notices nothing.
+	releaseWorktree()
 	os.Exit(2)
 }
 
@@ -635,6 +644,20 @@ func runServe(f flags) {
 			_ = openURL(url)
 		}()
 	}
+
+	// A worktree cw open added for this walkthrough is a directory nobody asked
+	// for, so it goes again when the reading stops. ctrl-c is how that happens,
+	// which is why it is caught here rather than taking the process out where
+	// it stands. Every other run has nothing to give back and notices nothing.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stop
+		fmt.Println()
+		releaseWorktree()
+		os.Exit(0)
+	}()
+
 	if err := http.Serve(ln, mux); err != nil {
 		die("%v", err)
 	}

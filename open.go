@@ -33,6 +33,7 @@ func cmdOpen(args []string) {
 	site := strings.TrimRight(envOr("CW_SITE", defaultSite), "/")
 	f := flags{port: -1}
 	target, password := "", strings.TrimSpace(os.Getenv("CW_PASSWORD"))
+	mode := worktreeAsk
 
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -60,6 +61,10 @@ func cmdOpen(args []string) {
 			f.noOpen = true
 		case a == "--offline":
 			f.offline = true
+		case a == "--worktree":
+			mode = worktreeYes
+		case a == "--no-worktree":
+			mode = worktreeNo
 		case a == "--password":
 			password = next()
 		case strings.HasPrefix(a, "--password="):
@@ -117,8 +122,10 @@ func cmdOpen(args []string) {
 
 	// Which checkout to read this against is not always the one that was
 	// found. A worktree already sitting on the right commit is a better answer
-	// than telling somebody to move the branch they are working on.
-	root, notes := checkoutFor(f.root, guessed == "" && f.root != "", doc.Source)
+	// than telling somebody to move the branch they are working on, and when
+	// there is no such worktree, making one is offered rather than described.
+	root, notes, want := checkoutFor(f.root, guessed == "" && f.root != "", doc.Source,
+		func() branchInfo { return branchOf(doc.Source, f.root, f.offline) })
 	f.root = root
 
 	fmt.Printf("%s\n  fetched from %s\n", doc.Title, url)
@@ -130,6 +137,11 @@ func cmdOpen(args []string) {
 	}
 	for _, line := range notes {
 		fmt.Printf("  %s\n", line)
+	}
+	if want != nil {
+		if added := offerWorktree(want, doc.Source, slug, mode, f.offline); added != "" {
+			f.root = added
+		}
 	}
 	fmt.Println()
 
@@ -306,146 +318,72 @@ func remoteNames(dir, want string) bool {
 //
 // pinned says the reader named the root themselves. Then it is not moved:
 // being told about a better checkout is help, being sent to a different one
-// than you asked for is not.
-func checkoutFor(root string, pinned bool, d *SourceView) (string, []string) {
-	if root == "" || d == nil || d.Commit == "" {
-		return root, nil
+// than you asked for is not. A worktree that gets made along the way is
+// different again, because that one was agreed to out loud.
+//
+// branch is asked for the branch this walkthrough is about, and it is a
+// function rather than a value because answering it can mean a call to a forge.
+// A checkout that already lines up asks nobody anything.
+func checkoutFor(root string, pinned bool, d *SourceView, branch func() branchInfo) (string, []string, *offer) {
+	if root == "" || d == nil {
+		return root, nil, nil
 	}
+	br, asked := branchInfo{}, false
+	about := func() branchInfo {
+		if !asked && branch != nil {
+			br, asked = branch(), true
+		}
+		return br
+	}
+
+	// A walkthrough written by cw always records the revision it was taken
+	// from. One that does not still has a branch, and where that branch is now
+	// is the closest thing there is to an answer.
+	want, byBranch := d.Commit, false
+	if want == "" {
+		want, byBranch = about().Head, true
+		if want == "" {
+			return root, nil, nil
+		}
+	}
+
 	head := ""
 	if out, err := runIn(root, "git", "rev-parse", "HEAD"); err == nil {
 		head = strings.TrimSpace(out)
 	}
-	want := d.Commit
 	if head == "" || sameCommit(head, want) {
-		return root, nil
+		return root, nil, nil
 	}
+
 	notes := []string{fmt.Sprintf("this was written against %s and the checkout is on %s",
 		short(want), short(head))}
+	if byBranch {
+		notes = []string{fmt.Sprintf("this records no revision, so branch %s as it is now (%s) is what it is read against, and the checkout is on %s",
+			about().Name, short(want), short(head))}
+	} else if n := about().Note; n != "" {
+		notes = append(notes, n)
+	}
 
 	all := worktreesOf(root)
-	if w, why := pickWorktree(all, root, want, d.Head); w.Path != "" {
+	if w, why := pickWorktree(all, root, want, about().Name); w.Path != "" {
 		if pinned {
 			return root, append(notes,
-				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why))
+				fmt.Sprintf("a worktree at %s is %s, which would line up better", w.Path, why)), nil
 		}
 		notes = append(notes, fmt.Sprintf("a worktree at %s is %s, so that is what will be read", w.Path, why))
 		if !sameCommit(w.Head, want) {
 			notes = append(notes, fmt.Sprintf("it is on %s though, so a snippet may still have moved", short(w.Head)))
 		}
-		return w.Path, notes
+		return w.Path, notes, nil
 	}
 
-	// Nothing checked out anywhere near it, so say how to get there. The
-	// worktree comes first because it costs this checkout nothing.
+	// Nothing checked out anywhere near it. A new worktree is the way there
+	// that costs this checkout nothing, so that is what gets offered.
+	o := &offer{Root: root, Path: newWorktreePath(root, all, d), Commit: want, Branch: about().Name}
 	if _, err := runIn(root, "git", "cat-file", "-e", want+"^{commit}"); err != nil {
-		notes = append(notes, "that commit is not here yet: "+fetchCommand(d))
+		o.Fetch = fetchArgs(d)
 	}
-	notes = append(notes,
-		"a worktree reads it without touching this checkout:",
-		"    git worktree add --detach "+newWorktreePath(root, all, d)+" "+short(want))
-	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
-		notes = append(notes, "or move this checkout instead: gh pr checkout "+m[2])
-	}
-	return root, notes
-}
-
-// ---------------------------------------------------------------- worktrees
-
-// worktree is one entry of git worktree list --porcelain.
-type worktree struct {
-	Path   string
-	Head   string
-	Branch string // the short name, empty when detached
-	Bare   bool
-}
-
-func worktreesOf(root string) []worktree {
-	out, err := runIn(root, "git", "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil
-	}
-	return parseWorktrees(out)
-}
-
-// parseWorktrees reads the porcelain form, which is groups of lines separated
-// by a blank one, each starting with the path.
-func parseWorktrees(out string) []worktree {
-	var all []worktree
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(line, "worktree "):
-			all = append(all, worktree{Path: filepath.Clean(strings.TrimPrefix(line, "worktree "))})
-		case len(all) == 0:
-			// Anything before the first path belongs to nothing.
-		case strings.HasPrefix(line, "HEAD "):
-			all[len(all)-1].Head = strings.TrimPrefix(line, "HEAD ")
-		case strings.HasPrefix(line, "branch "):
-			all[len(all)-1].Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
-		case line == "bare":
-			all[len(all)-1].Bare = true
-		}
-	}
-	return all
-}
-
-// pickWorktree chooses the checkout that will make the snippets line up.
-// Sitting on exactly the commit is worth more than being on the right branch,
-// because a branch that has moved on since is how snippets drift in the first
-// place.
-func pickWorktree(all []worktree, root, commit, branch string) (worktree, string) {
-	usable := func(w worktree) bool { return !w.Bare && w.Path != "" && !samePath(w.Path, root) }
-	for _, w := range all {
-		if usable(w) && sameCommit(w.Head, commit) {
-			return w, "on " + short(commit)
-		}
-	}
-	if branch != "" {
-		for _, w := range all {
-			if usable(w) && w.Branch == branch {
-				return w, "on " + branch
-			}
-		}
-	}
-	return worktree{}, ""
-}
-
-// newWorktreePath suggests where a new one would go, following wherever this
-// repository already keeps its worktrees rather than inventing a convention
-// for somebody. Only when there are none does it fall back to a directory
-// beside the checkout, and then the name carries the repository too.
-func newWorktreePath(root string, all []worktree, d *SourceView) string {
-	name := short(d.Commit)
-	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
-		name = "pr-" + m[2]
-	}
-
-	counts := map[string]int{}
-	best, most := "", 0
-	for _, w := range all {
-		if w.Bare || w.Path == "" || samePath(w.Path, root) {
-			continue
-		}
-		parent := filepath.Dir(w.Path)
-		counts[parent]++
-		if counts[parent] > most {
-			best, most = parent, counts[parent]
-		}
-	}
-	if best == "" {
-		return filepath.Join(filepath.Dir(root), filepath.Base(root)+"-"+name)
-	}
-	return filepath.Join(best, name)
-}
-
-// fetchCommand is what brings the commit into the object store. A pull request
-// has a ref of its own, which works for a fork as well, where fetching the
-// branch by name would not.
-func fetchCommand(d *SourceView) string {
-	if m := prURLPattern.FindStringSubmatch(d.URL); m != nil {
-		return "git fetch origin pull/" + m[2] + "/head"
-	}
-	return "git fetch"
+	return root, notes, o
 }
 
 func sameCommit(a, b string) bool {
