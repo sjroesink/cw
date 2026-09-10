@@ -35,6 +35,10 @@ func TestPRFilesURL(t *testing.T) {
 		{"https://github.com/o/r/pull/not-a-number", ""},
 		{"https://github.com/o/r/pull/", ""},
 		{"", ""},
+
+		// github.com in somebody's path is not github.com the host, and what
+		// comes out of here is what the page opens.
+		{"https://example.test/github.com/o/r/pull/3347", ""},
 	}
 	for _, c := range cases {
 		if got := prFilesURL(c.in); got != c.want {

@@ -267,12 +267,12 @@
               "body": "The server works the link out once and hands the page a base URL and a map of anchors. So the page does no hashing, makes no request, and the same function in the same file serves both the local button and the hosted one.",
               "code": {
                 "file": "web/ui.js",
-                "from": 720,
-                "text": "export function openButton(file, line, cls, to) {\n  if (!HOSTED) {\n    const b = el(\"button\", cls, \"open in IDE \u2197\");\n    b.type = \"button\";\n    b.title = \"open \" + file + \" at line \" + line + \" in \" + whereOpens();\n    b.addEventListener(\"click\", () => openAt(file, line));\n    return b;\n  }\n  const href = githubHref(file, line, to);\n  if (!href) {\n    const b = el(\"button\", cls, \"no link \u2197\");\n    b.type = \"button\";\n    b.title = \"this walkthrough names no repository, so there is nothing to link to\";\n    b.addEventListener(\"click\", () => toast(\"This walkthrough names no repository to link to\", true));\n    return b;\n  }\n  const a = el(\"a\", cls + \" open-link\", \"on GitHub \u2197\");\n  a.href = href;\n  a.target = \"_blank\";\n  a.rel = \"noreferrer\";\n  a.title = file + \" at line \" + line;\n  return a;\n}",
+                "from": 745,
+                "text": "export function openButton(file, line, cls, to) {\n  if (!HOSTED) {\n    const b = el(\"button\", cls, \"open in IDE \u2197\");\n    b.type = \"button\";\n    b.title = \"open \" + file + \" at line \" + line + \" in \" + whereOpens();\n    b.addEventListener(\"click\", () => openAt(file, line));\n    return b;\n  }\n  const href = githubHref(file, line, to);\n  if (!href) {\n    const b = el(\"button\", cls, \"no link \u2197\");\n    b.type = \"button\";\n    b.title = \"this walkthrough names no repository, so there is nothing to link to\";\n    b.addEventListener(\"click\", () => toast(\"This walkthrough names no repository to link to\", true));\n    return b;\n  }\n  const a = toCode(el(\"a\", cls + \" open-link\", \"on GitHub \u2197\"), href);\n  a.title = file + \" at line \" + line;\n  return a;\n}",
                 "lang": "javascript",
                 "hi": [
-                  721,
-                  736
+                  746,
+                  761
                 ]
               }
             }

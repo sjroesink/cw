@@ -687,6 +687,34 @@ export function githubHref(file, line, to) {
   return links.prFiles || null;
 }
 
+/* One tab for the code, navigated rather than replaced. A link with target
+   "_blank" opens a new tab on every click, so a walkthrough with ten code
+   blocks leaves ten tabs of the same repository behind it. A name is what makes
+   a tab findable again, and the slug is in the name so two walkthroughs read
+   side by side keep a tab each.
+
+   What "_blank" also did was keep the referrer out of it, and that half is
+   worth keeping: a walkthrough behind a password should not put its URL in
+   GitHub's logs. referrerpolicy does that on its own, without noreferrer's
+   other half, which is the half that leaves a tab nameless. */
+const codeTab = "cw-code" + (SLUG ? "-" + SLUG : "");
+
+function toCode(a, href) {
+  a.href = href;
+  a.target = codeTab;
+  a.referrerPolicy = "no-referrer";
+  return a;
+}
+
+// Following that link without one being on the page: a click on a line number
+// rather than on the button next to it lands in the same tab.
+function visitCode(href) {
+  const a = toCode(el("a"), href);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 /* A path in a panel head is long, wraps onto a second line and puts the half
    that identifies it last. So what is shown is the base name, the whole path is
    one hover away, and the name itself opens the file: in an editor locally, on
@@ -709,10 +737,7 @@ export function fileName(file, line, to, extra) {
     span.title = file;
     return span;
   }
-  const a = el("a", "file", short);
-  a.href = href;
-  a.target = "_blank";
-  a.rel = "noreferrer";
+  const a = toCode(el("a", "file", short), href);
   a.title = file + " · " + where;
   return a;
 }
@@ -733,10 +758,7 @@ export function openButton(file, line, cls, to) {
     b.addEventListener("click", () => toast("This walkthrough names no repository to link to", true));
     return b;
   }
-  const a = el("a", cls + " open-link", "on GitHub ↗");
-  a.href = href;
-  a.target = "_blank";
-  a.rel = "noreferrer";
+  const a = toCode(el("a", cls + " open-link", "on GitHub ↗"), href);
   a.title = file + " at line " + line;
   return a;
 }
@@ -744,7 +766,7 @@ export function openButton(file, line, cls, to) {
 export async function openAt(file, line) {
   if (HOSTED) {
     const href = githubHref(file, line);
-    if (href) window.open(href, "_blank", "noreferrer");
+    if (href) visitCode(href);
     else toast("This walkthrough names no repository to link to", true);
     return;
   }

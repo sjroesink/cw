@@ -80,10 +80,12 @@ func diffAnchor(path string) string {
 
 // prFilesURL turns a pull request URL into its file view, and returns empty for
 // anything that is not one. It is deliberately strict: guessing wrong here
-// sends a reader to a page that does not exist.
+// sends a reader to a page that does not exist. The host is part of that, and
+// it has to be github.com itself rather than a URL with those characters
+// somewhere in its path, because what comes out of here is what the page opens.
 func prFilesURL(u string) string {
 	u = strings.TrimRight(strings.TrimSpace(u), "/")
-	if u == "" || !strings.Contains(u, "github.com/") {
+	if !strings.HasPrefix(u, "https://github.com/") {
 		return ""
 	}
 	i := strings.Index(u, "/pull/")
