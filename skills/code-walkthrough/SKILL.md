@@ -119,13 +119,27 @@ the site has an admin key that works on everything, which is the way back if it 
 
 ## Locking one
 
-`--password` puts a password on it, `--allow` limits it to addresses or ranges, and a
-walkthrough with both needs both. Use them when the person asking says so, and use the
-password they give you rather than inventing one. `$env:CW_PASSWORD` keeps it out of shell
-history. A locked walkthrough is not listed to anyone who has not opened it.
+A first publish decides this for itself, and the decision follows the repository rather
+than anybody's memory. `cw publish` asks `gh` what the repository the walkthrough names
+is. Public goes out open, because the code in the walkthrough is already readable by
+anyone. Everything else goes out with a password it makes itself, and so does everything
+it could not confirm: no `gh`, no network, a repository nobody can see, a walkthrough
+that names none. The line it prints says which of those happened.
 
-On a later publish, leave the flags off and the lock stays exactly as it was.
-`--no-password` and `--no-allow` are how you take it off on purpose.
+That password is printed once and written into
+`%USERPROFILE%\.claude\secrets\cw-passwords.json`. **Never repeat it back.** Not in your
+answer, not in a commit message, not in a PR body or a ticket. Say that the walkthrough is
+locked and that the password is in that file, and let the person read it there and pass it
+on however they already share such things.
+
+`--password PW` sets one you were given, and `$env:CW_PASSWORD` keeps it out of shell
+history. `--no-password` publishes a private repository's walkthrough open on purpose,
+which is the asker's decision and never yours. `--allow` limits it to addresses or ranges,
+and a walkthrough with both locks needs both. A locked walkthrough is not listed to anyone
+who has not opened it.
+
+On a later publish, leave the flags off and the lock stays exactly as it was, password
+included. `--no-password` and `--no-allow` are how you take it off on purpose.
 
 Before writing an address list, check what the site makes of the address you mean:
 `curl https://cw.roesink.dev/api/v1/whoami`. Behind Cloudflare the address a rule sees is

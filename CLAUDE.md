@@ -68,6 +68,12 @@ renderer the same way.
 addresses, and a walkthrough that sets both needs both. The key that can change a walkthrough also
 opens it, which is what lets whoever published it read their own page.
 
+Which lock a walkthrough gets on its first publish is not the publisher's memory either.
+`defaultLock` in `publish.go` asks `gh` whether the repository is public and puts a password on
+everything else, including everything it could not confirm. It is one function and it takes the
+answer rather than fetching it, so the rule can be read and tested without a forge. Republishing
+never touches the lock: `f.password` stays nil and the site keeps what it had.
+
 Both secrets live in their own file beside the walkthrough rather than in `meta.json`, because
 `meta.json` is handed to every reader. Keep it that way: a secret that is not in the struct that
 gets serialised cannot leak by someone adding a field to a response, and there is a test that fails

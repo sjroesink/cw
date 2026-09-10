@@ -129,11 +129,11 @@
               "body": "A server on localhost can be reached by any site you have open. So the origin has to be this loopback server, and the caller has to know the token that was stamped into the page when it was served. Only then does anything get read.",
               "code": {
                 "file": "main.go",
-                "from": 762,
-                "text": "// guard keeps another page in the browser from driving this server. Everything\n// under /api needs the token the page was served with, and a cross-origin\n// caller is turned away before anything is read or opened.\nfunc (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}",
+                "from": 765,
+                "text": "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}",
                 "hi": [
-                  764,
-                  768
+                  767,
+                  771
                 ]
               }
             },
@@ -208,11 +208,11 @@
               "callout": "--force does not hide anything: the page says which snippets were already out of date when it was published.",
               "code": {
                 "file": "publish.go",
-                "from": 146,
+                "from": 147,
                 "text": "\troot := resolveRoot(flags{file: f.file, root: f.root}, view.RootHint)\n\ttree := &Tree{Root: root}\n\tchecked, moved, stale := tree.Verify(view)\n\tif root == \"\" {\n\t\tfmt.Fprintf(os.Stderr, \"cw: no working tree was found, so the snippets were not checked. \"+\n\t\t\t\"The page will say the code is unverified.\\n\")\n\t}\n\tif stale > 0 && !f.force {\n\t\tfmt.Fprintf(os.Stderr, \"cw: %d snippet(s) are no longer in the working tree. Run cw check to see which, \"+\n\t\t\t\"fix them, or publish with --force to say it out loud on the page.\\n\", stale)\n\t\tos.Exit(1)\n\t}\n",
                 "hi": [
-                  153,
-                  156
+                  154,
+                  157
                 ]
               }
             },
@@ -221,8 +221,8 @@
               "body": "By the time a document is stored it has an id on every part, section and step and a hash on every snippet. An author never writes those, and a consumer can always rely on them being there.",
               "code": {
                 "file": "api.go",
-                "from": 213,
-                "text": "\tswitch {\n\tcase view.V1 != nil:\n\t\tview.V1.Schema = base + \"/schema/v1.json\"\n\t\tEnsureIDs(view.V1)\n\t\tEnsureAnchors(view.V1)\n\tcase view.V2 != nil:\n\t\tview.V2.Schema = base + \"/schema/v2.json\"\n\t\tEnsureAnchors2(view.V2)\n\t}",
+                "from": 212,
+                "text": "\tbase := strings.TrimRight(h.base, \"/\")\n\tswitch {\n\tcase view.V1 != nil:\n\t\tview.V1.Schema = base + \"/schema/v1.json\"\n\t\tEnsureIDs(view.V1)\n\t\tEnsureAnchors(view.V1)\n\tcase view.V2 != nil:\n\t\tview.V2.Schema = base + \"/schema/v2.json\"\n\t\tEnsureAnchors2(view.V2)\n\t}",
                 "hi": [
                   216,
                   217
@@ -240,12 +240,12 @@
               "body": "A file the pull request touches links into the diff, where the reader sees the change rather than only the result. Anything else links to the file at the commit, which stays right after the branch has moved on. With neither, there is nothing to link to and the answer is nil rather than an object full of empty strings.",
               "code": {
                 "file": "github.go",
-                "from": 37,
+                "from": 43,
                 "text": "func BuildGitHubLinks(src *SourceView) *GitHubLinks {\n\tif src == nil {\n\t\treturn nil\n\t}\n\tif src.Provider != \"\" && src.Provider != \"github\" {\n\t\treturn nil\n\t}\n\trepo := strings.Trim(strings.TrimSpace(src.Repo), \"/\")\n\tout := &GitHubLinks{Repo: repo, Commit: src.Commit}\n\n\tif repo != \"\" && strings.Count(repo, \"/\") == 1 && src.Commit != \"\" {\n\t\tout.BlobBase = \"https://github.com/\" + repo + \"/blob/\" + src.Commit + \"/\"\n\t}\n\tif files := prFilesURL(src.URL); files != \"\" {\n\t\tout.PRFiles = files\n\t\tout.Anchors = map[string]string{}\n\t\tfor _, f := range src.ChangedFiles {\n\t\t\tf = strings.TrimSpace(f)\n\t\t\tif f == \"\" {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tout.Anchors[f] = diffAnchor(f)\n\t\t}\n\t}\n\tif out.BlobBase == \"\" && out.PRFiles == \"\" {\n\t\treturn nil\n\t}\n\treturn out\n}",
                 "hi": [
-                  44,
-                  47,
-                  50
+                  50,
+                  53,
+                  56
                 ]
               },
               "diagram": {
@@ -255,9 +255,9 @@
                 "refs": {
                   "diff": {
                     "file": "github.go",
-                    "from": 68,
+                    "from": 73,
                     "note": "The anchor is the sha256 of the path. GitHub does not document this, so it has a test and a fallback.",
-                    "code": "// has on the new side, hex, with a diff- in front. A line is addressed by\n// appending R and the line number for the new side, L for the old.\nfunc diffAnchor(path string) string {\n\tsum := sha256.Sum256([]byte(path))\n\treturn \"diff-\" + hex.EncodeToString(sum[:])\n}"
+                    "code": "// diffAnchor is the id GitHub gives a file in a diff: the sha256 of the path it\n// has on the new side, hex, with a diff- in front. A line is addressed by\n// appending R and the line number for the new side, L for the old.\nfunc diffAnchor(path string) string {\n\tsum := sha256.Sum256([]byte(path))\n\treturn \"diff-\" + hex.EncodeToString(sum[:])\n}"
                   }
                 }
               }

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -128,5 +129,68 @@ func mustRun(t *testing.T, dir, name string, args ...string) {
 	t.Helper()
 	if out, err := runIn(dir, name, args...); err != nil {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+	}
+}
+
+// The rule that decides whether a walkthrough goes out readable by anyone. Only
+// a repository confirmed public does; everything else, including everything
+// nobody could confirm, gets a password.
+func TestDefaultLockLocksWhatItCannotConfirm(t *testing.T) {
+	pw, note := defaultLock(true, "cli/cli is public")
+	if pw != nil {
+		t.Errorf("locked a public repository anyway")
+	}
+	if !strings.Contains(note, "without a password") {
+		t.Errorf("said %q", note)
+	}
+
+	for _, why := range []string{
+		"innovadis-dev/Fincent is private",
+		"gh is not on this machine, so whether x is public could not be asked",
+		"this walkthrough names no repository to ask about",
+	} {
+		pw, note := defaultLock(false, why)
+		if pw == nil || *pw == "" {
+			t.Fatalf("%q went out unlocked", why)
+		}
+		if !strings.Contains(note, "with a password") || !strings.HasPrefix(note, why) {
+			t.Errorf("said %q, which does not say why", note)
+		}
+	}
+}
+
+// A password gets read out over a call and typed in from a screenshot, so it
+// holds none of the characters that turn into each other on the way.
+func TestANewPasswordIsTypeable(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 50; i++ {
+		pw := newPassword()
+		if len(pw) != 18 {
+			t.Fatalf("%q is %d characters", pw, len(pw))
+		}
+		if strings.ContainsAny(pw, "lo01") || strings.ToLower(pw) != pw {
+			t.Fatalf("%q holds something that gets mistyped", pw)
+		}
+		for _, c := range pw {
+			if !strings.ContainsRune(passwordAlphabet, c) {
+				t.Fatalf("%q holds %q, which is not in the alphabet", pw, c)
+			}
+		}
+		if seen[pw] {
+			t.Fatalf("%q came out twice in fifty", pw)
+		}
+		seen[pw] = true
+	}
+}
+
+// What the document says wins, because it is what the walkthrough is about. The
+// remote is the fallback, in either of the two shapes git writes one.
+func TestRepoOfReadsTheDocumentFirst(t *testing.T) {
+	w := &Walkthrough{Source: &SourceView{Repo: "innovadis-dev/Fincent"}}
+	if got := repoOf(w, ""); got != "innovadis-dev/Fincent" {
+		t.Errorf("repoOf = %q", got)
+	}
+	if got := repoOf(&Walkthrough{}, ""); got != "" {
+		t.Errorf("repoOf without a source or a root = %q", got)
 	}
 }

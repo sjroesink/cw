@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os/exec"
 	"strings"
+	"time"
 )
 
 /*
@@ -99,4 +105,85 @@ func prFilesURL(u string) string {
 		}
 	}
 	return u[:i] + "/pull/" + number + "/files"
+}
+
+// ---------------------------------------------------------------- asking gh
+
+// ghJSON runs gh and reads its answer. It gets a deadline of its own because it
+// is a network call in the middle of opening a page: a forge that is slow today
+// should cost a couple of seconds rather than the whole command.
+func ghJSON(dir string, into any, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return errors.New("gh did not answer in time")
+		}
+		if msg := lastLine(stderr.String()); msg != "" {
+			return errors.New(msg)
+		}
+		return err
+	}
+	return json.Unmarshal(out, into)
+}
+
+// RepoIsPublic asks GitHub whether anybody can read a repository, and says how
+// it knows.
+//
+// This decides whether a walkthrough goes out with a password on it, so what
+// happens when there is no answer matters more than the answer itself. Not
+// knowing counts as not public. A public repository that ends up locked costs
+// somebody one flag; a private one that ends up open cannot be taken back,
+// because whoever read it has read it.
+func RepoIsPublic(repo, dir string) (bool, string) {
+	if repo == "" {
+		return false, "this walkthrough names no repository to ask about"
+	}
+	if _, err := exec.LookPath("gh"); err != nil {
+		return false, "gh is not on this machine, so whether " + repo + " is public could not be asked"
+	}
+	var out struct {
+		Visibility string `json:"visibility"`
+	}
+	if err := ghJSON(dir, &out, "repo", "view", repo, "--json", "visibility"); err != nil {
+		return false, "gh could not say whether " + repo + " is public: " + ghSaid(err)
+	}
+	switch v := strings.ToLower(out.Visibility); v {
+	case "public":
+		return true, repo + " is public"
+	case "":
+		return false, "gh named no visibility for " + repo
+	default:
+		return false, repo + " is " + v
+	}
+}
+
+// repoFromRemote is repoFromURL over the other shape a remote comes in:
+// git@github.com:owner/name.git, which has no scheme and a colon where the path
+// starts.
+func repoFromRemote(u string) string {
+	u = strings.TrimSpace(u)
+	if i := strings.Index(u, "@"); i >= 0 && !strings.Contains(u, "://") {
+		u = "ssh://" + strings.Replace(u[i+1:], ":", "/", 1)
+	}
+	return repoFromURL(u)
+}
+
+// ghSaid is the part of a gh error worth repeating. It puts its transport in
+// front of the message and a category in brackets behind it, and neither says
+// anything to somebody who just wanted to publish a walkthrough.
+func ghSaid(err error) string {
+	msg := strings.TrimPrefix(err.Error(), "GraphQL: ")
+	if i := strings.Index(msg, ". ("); i >= 0 {
+		msg = msg[:i]
+	}
+	return strings.TrimSuffix(msg, ".")
 }

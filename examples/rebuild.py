@@ -20,23 +20,42 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "examples" / "cw-itself.json"
 
 
-def slice_of(path, first, last):
-    """The lines first..last of a file, inclusive, numbered the way an editor does."""
+def slice_of(path, first, last, starts):
+    """The lines first..last of a file, inclusive, numbered the way an editor does.
+
+    `starts` is what line `first` is expected to say. Line numbers here are
+    absolute and the code they point at moves, and re-slicing at a stale number
+    produces a snippet that still matches the file while describing something
+    else entirely. `cw check` cannot see that, because the text and the file do
+    agree. So the range says what it is looking for, and when the file has moved
+    on this says where it went instead of quietly pointing at the neighbours.
+    """
     text = (ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
     lines = text.split("\n")
     if last > len(lines):
         sys.exit(f"{path} has {len(lines)} lines, and {last} was asked for")
+
+    got = lines[first - 1].strip()
+    if got != starts.strip():
+        where = [i + 1 for i, line in enumerate(lines) if line.strip() == starts.strip()]
+        moved = f"it is on line {where[0]} now" if len(where) == 1 else (
+            f"it is on lines {where} now" if where else "it is not in this file any more")
+        sys.exit(
+            f"{path}:{first} reads {got!r},\n"
+            f"  but this snippet starts at {starts.strip()!r}, and {moved}.\n"
+            f"  Fix the numbers in examples/rebuild.py rather than the JSON.")
     return "\n".join(lines[first - 1:last])
 
 
-def code(path, first, last, **extra):
-    block = {"file": path, "from": first, "text": slice_of(path, first, last)}
+def code(path, first, last, starts, **extra):
+    block = {"file": path, "from": first, "text": slice_of(path, first, last, starts)}
     block.update(extra)
     return block
 
 
-def ref(path, first, last, note):
-    return {"file": path, "from": first, "note": note, "code": slice_of(path, first, last)}
+def ref(path, first, last, starts, note):
+    return {"file": path, "from": first, "note": note,
+            "code": slice_of(path, first, last, starts)}
 
 
 WALKTHROUGH = {
@@ -83,7 +102,7 @@ WALKTHROUGH = {
                                 "that hold steps. There is no template and no per-topic code anywhere: adding "
                                 "a walkthrough is adding a file."
                             ),
-                            "code": code("doc.go", 21, 40,
+                            "code": code("doc.go", 21, 40, "type Doc struct {",
                                          hi=[23, 37, 38],
                                          notes=[{"line": 37, "text": "The one field that has to be an exact value, and there are two of them now. A reader that does not know the version refuses the file instead of guessing which half of it it still understands."}]),
                             "diagram": {
@@ -91,7 +110,7 @@ WALKTHROUGH = {
                                 "caption": "One document, and more than one thing that can read it.",
                                 "def": "flowchart LR\n  json[\"walkthrough.json\"] --> schema[\"walkthrough.schema.json\"]\n  schema --> local[\"cw serve\"]\n  schema --> host[\"cw host\"]\n  local --> tree[\"your working tree\"]\n  host --> gh[\"GitHub\"]\n  json -.-> other[\"an editor plugin,\\nsomething that reads it aloud\"]",
                                 "refs": {
-                                    "schema": ref("schema.go", 233, 242, "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
+                                    "schema": ref("schema.go", 233, 242, "func (v *validator) walk(at string, value any, sch map[string]any) {", "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
                                 },
                             },
                         },
@@ -103,7 +122,7 @@ WALKTHROUGH = {
                                 "line number into a link, so they belong in one place a machine can read."
                             ),
                             "callout": "commit is what makes a link permanent. Without it a snippet can only point at a branch tip, which is a link that quietly starts lying.",
-                            "code": code("doc.go", 42, 55, hi=[49, 52]),
+                            "code": code("doc.go", 42, 55, "// Source is where the walkthrough came from, in a form something other than a", hi=[49, 52]),
                         },
                     ],
                 },
@@ -119,7 +138,7 @@ WALKTHROUGH = {
                                 "edited afterwards and the anchor is now something a consumer would act on and "
                                 "be wrong about."
                             ),
-                            "code": code("doc.go", 294, 310, hi=[303, 307]),
+                            "code": code("doc.go", 294, 310, "// anchorErrs holds to and sha to what the text actually is. Both are written by", hi=[303, 307]),
                         },
                         {
                             "title": "Two ids in one place is worse than none",
@@ -128,7 +147,7 @@ WALKTHROUGH = {
                                 "with the same id means a link lands on whichever one the reader's browser "
                                 "happened to find first, which is why this is an error rather than a warning."
                             ),
-                            "code": code("doc.go", 175, 187, hi=[183, 184]),
+                            "code": code("doc.go", 175, 187, "// An id is what a reader's progress and every deep link hang off, so two of", hi=[183, 184]),
                         },
                     ],
                 },
@@ -155,7 +174,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 762, 774, hi=[764, 768]),
+                            "code": code("main.go", 765, 777, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[767, 771]),
                         },
                         {
                             "title": "A path is checked, not cleaned",
@@ -164,7 +183,7 @@ WALKTHROUGH = {
                                 "asked whether it is still inside. A path that climbs out is refused. Clamping "
                                 "it instead would open a file the walkthrough never named."
                             ),
-                            "code": code("doc.go", 334, 345, hi=[340, 342]),
+                            "code": code("doc.go", 334, 345, "func (t *Tree) safePath(rel string) (string, string, error) {", hi=[340, 342]),
                         },
                     ],
                 },
@@ -179,7 +198,7 @@ WALKTHROUGH = {
                                 "there, the whole file is searched for them. Finding them somewhere else is a "
                                 "different answer from not finding them at all."
                             ),
-                            "code": code("doc.go", 422, 436, hi=[422, 429, 435]),
+                            "code": code("doc.go", 422, 436, "if from > 0 && from-1+len(want) <= len(have) && matches(from-1) {", hi=[422, 429, 435]),
                             "notes": None,
                         },
                         {
@@ -189,7 +208,7 @@ WALKTHROUGH = {
                                 "code the walkthrough describes. Code that is gone is not. The page shows the "
                                 "two differently, and the count in the banner only holds the second."
                             ),
-                            "code": code("doc.go", 355, 370, hi=[364, 366]),
+                            "code": code("doc.go", 355, 370, "func (t *Tree) Verify(w *Walkthrough) (checked, moved, stale int) {", hi=[364, 366]),
                         },
                     ],
                 },
@@ -217,7 +236,7 @@ WALKTHROUGH = {
                                 "quietly, and --force is how you say you meant it."
                             ),
                             "callout": "--force does not hide anything: the page says which snippets were already out of date when it was published.",
-                            "code": code("publish.go", 146, 158, hi=[153, 156]),
+                            "code": code("publish.go", 147, 159, "root := resolveRoot(flags{file: f.file, root: f.root}, view.RootHint)", hi=[154, 157]),
                         },
                         {
                             "title": "Ids and anchors are filled in, not typed",
@@ -226,7 +245,7 @@ WALKTHROUGH = {
                                 "and a hash on every snippet. An author never writes those, and a consumer can "
                                 "always rely on them being there."
                             ),
-                            "code": code("api.go", 213, 221, hi=[216, 217]),
+                            "code": code("api.go", 212, 221, "base := strings.TrimRight(h.base, \"/\")", hi=[216, 217]),
                         },
                     ],
                 },
@@ -243,13 +262,13 @@ WALKTHROUGH = {
                                 "is nothing to link to and the answer is nil rather than an object full of "
                                 "empty strings."
                             ),
-                            "code": code("github.go", 37, 65, hi=[44, 47, 50]),
+                            "code": code("github.go", 43, 71, "func BuildGitHubLinks(src *SourceView) *GitHubLinks {", hi=[50, 53, 56]),
                             "diagram": {
                                 "kind": "flow",
                                 "caption": "One decision, made once per walkthrough rather than once per click.",
                                 "def": "flowchart TD\n  s[\"source\"] --> q{\"file in\\nchangedFiles?\"}\n  q -->|yes| diff[\"pull/N/files#diff-<sha256>R<line>\"]\n  q -->|no| blob[\"blob/<commit>/<path>#L18-L24\"]\n  q -->|no commit,\\nno pull request| none[\"no link\"]",
                                 "refs": {
-                                    "diff": ref("github.go", 68, 73, "The anchor is the sha256 of the path. GitHub does not document this, so it has a test and a fallback."),
+                                    "diff": ref("github.go", 73, 79, "// diffAnchor is the id GitHub gives a file in a diff: the sha256 of the path it", "The anchor is the sha256 of the path. GitHub does not document this, so it has a test and a fallback."),
                                 },
                             },
                         },
@@ -260,7 +279,7 @@ WALKTHROUGH = {
                                 "anchors. So the page does no hashing, makes no request, and the same function "
                                 "in the same file serves both the local button and the hosted one."
                             ),
-                            "code": code("web/ui.js", 449, 471, lang="javascript", hi=[450, 465]),
+                            "code": code("web/ui.js", 449, 471, "export function openButton(file, line, cls, to) {", lang="javascript", hi=[450, 465]),
                         },
                     ],
                 },

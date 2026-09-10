@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The anchor GitHub gives a file in a diff is not documented, so this is the
 // one place that records what we believe it to be. sha256("doc.go") checked by
@@ -77,5 +80,32 @@ func TestBuildGitHubLinks(t *testing.T) {
 		if g := BuildGitHubLinks(src); g != nil {
 			t.Errorf("BuildGitHubLinks(%+v) = %+v, want nil", src, g)
 		}
+	}
+}
+
+func TestRepoFromRemoteReadsBothShapesGitWrites(t *testing.T) {
+	for remote, want := range map[string]string{
+		"git@github.com:innovadis-dev/Fincent.git":     "innovadis-dev/Fincent",
+		"https://github.com/innovadis-dev/Fincent.git": "innovadis-dev/Fincent",
+		"https://github.com/cli/cli\n":                 "cli/cli",
+		"ssh://git@github.com/cli/cli.git":             "cli/cli",
+		"":                                             "",
+		"/some/local/path":                             "",
+	} {
+		if got := repoFromRemote(remote); got != want {
+			t.Errorf("repoFromRemote(%q) = %q, want %q", remote, got, want)
+		}
+	}
+}
+
+// Nothing to ask about is not the same as an answer, and it must not read as
+// one: a walkthrough with no repository in it goes out locked.
+func TestRepoIsPublicSaysNoWhenItCannotKnow(t *testing.T) {
+	public, why := RepoIsPublic("", "")
+	if public {
+		t.Errorf("called a repository it cannot name public")
+	}
+	if !strings.Contains(why, "names no repository") {
+		t.Errorf("said %q", why)
 	}
 }

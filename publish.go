@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -172,6 +173,21 @@ func cmdPublish(args []string) {
 	if err != nil {
 		die("%v", err)
 	}
+	target, method, slug := f.resolveTarget()
+
+	// A first publish that says nothing about a password gets one, unless the
+	// repository it is about is public. Republishing never touches the lock:
+	// f.password stays nil and the site keeps whatever it had.
+	made, lock := "", ""
+	if f.password == nil && method == http.MethodPost {
+		public, why := RepoIsPublic(repoOf(view, root), root)
+		if pw, note := defaultLock(public, why); pw != nil {
+			made, f.password, lock = *pw, pw, note
+		} else {
+			lock = note
+		}
+	}
+
 	// Anything about who may read it travels in an envelope around the
 	// document, because it is about this copy on this site and not about the
 	// walkthrough itself.
@@ -184,7 +200,6 @@ func cmdPublish(args []string) {
 		}
 	}
 
-	target, method, slug := f.resolveTarget()
 	key := ""
 	if method == http.MethodPut {
 		if key = editKeyFor(f.site, slug); key == "" {
@@ -202,6 +217,11 @@ func cmdPublish(args []string) {
 			fmt.Printf("  edit key  %s\n", out.Key)
 		}
 	}
+	if made != "" {
+		if err := rememberPassword(f.site, out.Slug, made); err != nil {
+			fmt.Fprintf(os.Stderr, "cw: could not store the password, so write it down now: %v\n", err)
+		}
+	}
 
 	fmt.Printf("%s\n", out.URL)
 	fmt.Printf("  %s\n", view.Title)
@@ -211,7 +231,14 @@ func cmdPublish(args []string) {
 	if c := commitOf(view); c != "" {
 		fmt.Printf("  against commit %s\n", short(c))
 	}
-	if f.password != nil {
+	if lock != "" {
+		fmt.Printf("  %s\n", lock)
+	}
+	if made != "" {
+		path, _ := passwordPath()
+		fmt.Printf("  the password is %s, and it is in %s\n", made, path)
+	}
+	if f.password != nil && made == "" {
 		if *f.password == "" {
 			fmt.Printf("  no password on it any more\n")
 		} else {
@@ -311,7 +338,8 @@ func secretPath(name string) (string, error) {
 	return filepath.Join(home, ".claude", "secrets", name), nil
 }
 
-func editKeyPath() (string, error) { return secretPath("cw-keys.json") }
+func editKeyPath() (string, error)  { return secretPath("cw-keys.json") }
+func passwordPath() (string, error) { return secretPath("cw-passwords.json") }
 
 func editKeyID(site, slug string) string {
 	return strings.TrimRight(site, "/") + "/" + slug
@@ -346,14 +374,30 @@ func rememberEditKey(site, slug, key string) error {
 	if err != nil {
 		return err
 	}
+	return rememberSecret(path, editKeyID(site, slug), key)
+}
+
+func rememberPassword(site, slug, password string) error {
+	path, err := passwordPath()
+	if err != nil {
+		return err
+	}
+	return rememberSecret(path, editKeyID(site, slug), password)
+}
+
+// rememberSecret writes one value into one of the files in the secrets
+// directory. They are all the same shape, site and name to the secret, and all
+// of them are 0600 and nowhere near the walkthrough, which lives in a
+// repository somebody will commit.
+func rememberSecret(path, id, value string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	keys := map[string]string{}
-	_ = readJSONFile(path, &keys)
-	keys[editKeyID(site, slug)] = key
+	all := map[string]string{}
+	_ = readJSONFile(path, &all)
+	all[id] = value
 
-	body, err := json.MarshalIndent(keys, "", "  ")
+	body, err := json.MarshalIndent(all, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -600,4 +644,64 @@ func splitList(v string) []string {
 		}
 	}
 	return out
+}
+
+// ---------------------------------------------------------------- the lock
+
+/*
+Publishing is open: anybody who can reach the site can put a walkthrough on it,
+and anybody with the link can read one that is not locked. That is right for a
+walkthrough of a public repository, where the code in it is already readable by
+anyone, and wrong for every other one.
+
+So the default follows the repository rather than the publisher's memory. Public
+goes out open, everything else goes out with a password that is made here,
+printed once and written down beside the edit key. Saying nothing is the common
+case, and the common case should not be the one that leaks.
+*/
+
+// defaultLock is what happens on a first publish when nobody said anything
+// about a password. It takes the answer rather than asking for it, so the rule
+// can be read, and tested, without a forge.
+func defaultLock(public bool, why string) (*string, string) {
+	if public {
+		return nil, why + ", so it went out without a password"
+	}
+	pw := newPassword()
+	return &pw, why + ", so it went out with a password"
+}
+
+// repoOf is the owner and name to ask about: what the walkthrough says, and
+// failing that what the checkout it was published from calls its origin.
+func repoOf(view *Walkthrough, root string) string {
+	if view.Source != nil && view.Source.Repo != "" {
+		return strings.Trim(view.Source.Repo, "/")
+	}
+	if root == "" {
+		return ""
+	}
+	out, err := runIn(root, "git", "remote", "get-url", "origin")
+	if err != nil {
+		return ""
+	}
+	return repoFromRemote(out)
+}
+
+// passwordAlphabet leaves out the characters that get misheard on a call and
+// mistyped from a screenshot: l and 1, o and 0. Thirty-two of them divides 256,
+// so picking with a modulo is not weighted towards the front of the alphabet.
+const passwordAlphabet = "abcdefghijkmnpqrstuvwxyz23456789"
+
+// newPassword is one somebody has to be able to pass on out loud. Eighteen
+// characters of this is ninety bits, which is far past what an unlock form
+// needs and costs nothing to carry.
+func newPassword() string {
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		die("this machine has no randomness to make a password out of: %v", err)
+	}
+	for i, v := range b {
+		b[i] = passwordAlphabet[int(v)%len(passwordAlphabet)]
+	}
+	return string(b)
 }

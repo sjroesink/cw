@@ -2,9 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -95,32 +92,6 @@ func branchOf(d *SourceView, root string, offline bool) branchInfo {
 		b.Note += ", which is on " + short(b.Head) + " now"
 	}
 	return b
-}
-
-// ghJSON runs gh and reads its answer. It gets a deadline of its own because it
-// is a network call in the middle of opening a page: a forge that is slow today
-// should cost a couple of seconds rather than the whole command.
-func ghJSON(dir string, into any, args ...string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		if ctx.Err() != nil {
-			return errors.New("gh did not answer in time")
-		}
-		if msg := lastLine(stderr.String()); msg != "" {
-			return errors.New(msg)
-		}
-		return err
-	}
-	return json.Unmarshal(out, into)
 }
 
 // looksLikeRevision separates the two things cw/1 and cw/2 both wrote into the

@@ -40,6 +40,12 @@ Publishing is open: anyone who can reach the site can put a walkthrough on it. W
 key for that one walkthrough, and it is the only thing that can change it afterwards. Only its hash
 is stored, so a lost key means asking whoever runs the site, whose admin key works on everything.
 
+Whether a first publish locks it is not left to whoever runs the command. `cw publish` asks `gh`
+what the repository the walkthrough names is: public goes out open, and everything else goes out
+with a password it makes itself, printed once and stored beside the edit key. Not being able to ask
+counts as not public. `--password` and `--no-password` overrule that, and a later publish leaves the
+lock exactly as it was.
+
 A walkthrough can be locked with a password, with a list of addresses, or with both, and both are
 needed when both are set. A locked one is not listed to anyone who has not opened it. Passwords are
 stored as salted PBKDF2, and an unlock is a cookie signed over that one name, so it does not open
