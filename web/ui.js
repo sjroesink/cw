@@ -283,6 +283,125 @@ export async function drawMermaid(host, def) {
   }
 }
 
+/* ------------------------------------------------------------------ full size */
+
+/* A diagram in a step is drawn to fit the panel it sits in, and a wide one gets
+   small doing it: the labels shrink with the picture and stop being readable
+   somewhere around a page width. This is the way to see it at the size it was
+   drawn at, in a dialog that owns the window, starting at its own size rather
+   than at whatever fits and zoomable from there.
+
+   It renders the definition a second time instead of moving the svg out of the
+   step, because the one in the step keeps its click targets and its place on
+   the page while this is open. */
+let zoom = null;
+
+/* Whether the diagram dialog is up, which the page's own keys have to know:
+   escape closes this rather than walking back out of the step. */
+export function zoomOpen() {
+  return !!(zoom && zoom.el.open);
+}
+
+export function openDiagram(def, label) {
+  const z = zoom || (zoom = buildZoom());
+  if (z.el.open) z.el.close();
+  z.box.textContent = "";
+  z.label.textContent = label || "diagram";
+  z.svg = null;
+  z.natural = 0;
+  scaleTo(z, 1);
+
+  const host = el("div", "zoom-svg");
+  z.box.appendChild(host);
+  z.el.showModal();
+  drawMermaid(host, def).then((svg) => {
+    if (!svg || !z.el.open) return;
+    z.svg = svg;
+    // Mermaid answers with a viewBox, which is the size it laid the diagram out
+    // at before anything scaled it to fit anything.
+    const box = svg.viewBox && svg.viewBox.baseVal;
+    z.natural = (box && box.width) || svg.getBoundingClientRect().width || 0;
+    // Its own size at least, and larger when the window has the room. Fitting
+    // is what the step already does, so fitting again would show nothing new.
+    const room = z.box.clientWidth - 44;
+    scaleTo(z, z.natural && room > z.natural ? room / z.natural : 1);
+  });
+}
+
+function scaleTo(z, scale) {
+  z.scale = Math.min(6, Math.max(0.25, scale));
+  z.pct.textContent = Math.round(z.scale * 100) + "%";
+  if (!z.svg || !z.natural) return;
+  z.svg.style.maxWidth = "none";
+  z.svg.style.width = Math.round(z.natural * z.scale) + "px";
+  z.svg.style.height = "auto";
+}
+
+function buildZoom() {
+  const dlg = document.createElement("dialog");
+  dlg.className = "zoom";
+
+  const head = el("div", "zoom-head");
+  const label = el("span", "kind", "diagram");
+  head.appendChild(label);
+  head.appendChild(el("span", "grow"));
+
+  const z = { el: dlg, label, box: el("div", "zoom-box"), pct: el("button", "tiny", "100%"), svg: null, natural: 0, scale: 1 };
+
+  const step = (by) => scaleTo(z, z.scale * by);
+  for (const [text, title, fn] of [
+    ["-", "smaller", () => step(1 / 1.25)],
+    [null, "back to the size it was drawn at", () => scaleTo(z, 1)],
+    ["+", "larger", () => step(1.25)],
+  ]) {
+    const b = text === null ? z.pct : el("button", "tiny", text);
+    b.type = "button";
+    b.title = title;
+    b.addEventListener("click", fn);
+    head.appendChild(b);
+  }
+
+  const x = el("button", "x", "×");
+  x.type = "button";
+  x.title = "close";
+  x.addEventListener("click", () => dlg.close());
+  head.appendChild(x);
+
+  dlg.appendChild(head);
+  dlg.appendChild(z.box);
+
+  // Dragging beats reaching for a scrollbar on a picture that is wider than the
+  // window, which is the whole reason for being here.
+  let from = null;
+  z.box.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    from = { x: e.clientX, y: e.clientY, left: z.box.scrollLeft, top: z.box.scrollTop };
+    z.box.classList.add("dragging");
+  });
+  z.box.addEventListener("pointermove", (e) => {
+    if (!from) return;
+    z.box.scrollLeft = from.left - (e.clientX - from.x);
+    z.box.scrollTop = from.top - (e.clientY - from.y);
+  });
+  for (const end of ["pointerup", "pointercancel", "pointerleave"]) {
+    z.box.addEventListener(end, () => { from = null; z.box.classList.remove("dragging"); });
+  }
+
+  dlg.addEventListener("keydown", (e) => {
+    if (e.key === "+" || e.key === "=") step(1.25);
+    else if (e.key === "-") step(1 / 1.25);
+    else if (e.key === "0") scaleTo(z, 1);
+    else return;
+    e.preventDefault();
+  });
+  // Outside the picture is the way out, next to escape and the ×.
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener("close", () => { z.box.textContent = ""; z.svg = null; });
+
+  document.body.appendChild(dlg);
+  return z;
+}
+
 /* ------------------------------------------------------------------ highlighting */
 
 /* The bundle is vendored like mermaid, so this works offline after the first

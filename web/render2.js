@@ -7,7 +7,7 @@
    of any of them, so that is what it does. */
 
 import {
-  HOSTED, el, mdEl, mdInline, baseName, drawMermaid, highlightInto, langFor,
+  HOSTED, el, mdEl, mdInline, baseName, drawMermaid, openDiagram, highlightInto, langFor,
   fileName, openButton, openAt, every,
 } from "./ui.js";
 import { state, doc, parts, setUI, setSticky, go, openStep } from "./state.js";
@@ -390,9 +390,14 @@ function diagramBlock(b, at) {
   const head = el("div", "panel-head");
   head.appendChild(el("span", "kind", "diagram"));
   if ((b.links || []).length) head.appendChild(el("span", "hint", "click a shape for its code"));
+  const big = el("button", "tiny", "full size");
+  big.type = "button";
+  big.title = "the diagram in a window of its own";
+  if (!(b.links || []).length) big.style.marginLeft = "auto";
+  big.addEventListener("click", () => openDiagram(b.text));
+  head.appendChild(big);
   const src = el("button", "tiny", ui().source === at ? "hide mermaid source" : "view mermaid source");
   src.type = "button";
-  if (!(b.links || []).length) src.style.marginLeft = "auto";
   src.addEventListener("click", () => setUI({ source: ui().source === at ? null : at }));
   head.appendChild(src);
   panel.appendChild(head);

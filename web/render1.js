@@ -7,7 +7,7 @@
    shell draws those and asks this file only what a step looks like. */
 
 import {
-  HOSTED, el, mdEl, mdInline, drawMermaid, highlightInto, langFor,
+  HOSTED, el, mdEl, mdInline, drawMermaid, openDiagram, highlightInto, langFor,
   fileName, openButton, openAt, every,
 } from "./ui.js";
 import { state, doc, go, setUI, setSticky } from "./state.js";
@@ -59,9 +59,14 @@ function panelDiagram(dg) {
   head.appendChild(el("span", "kind", dg.kind || "diagram"));
   const refCount = Object.keys(dg.refs || {}).length;
   if (refCount) head.appendChild(el("span", "hint", "click a block for its code"));
+  const big = el("button", "tiny", "full size");
+  big.type = "button";
+  big.title = "the diagram in a window of its own";
+  if (!refCount) big.style.marginLeft = "auto";
+  big.addEventListener("click", () => openDiagram(dg.def, dg.kind));
+  head.appendChild(big);
   const src = el("button", "tiny", ui().source ? "hide mermaid source" : "view mermaid source");
   src.type = "button";
-  if (!refCount) src.style.marginLeft = "auto";
   src.addEventListener("click", () => setUI({ source: !ui().source }));
   head.appendChild(src);
   panel.appendChild(head);

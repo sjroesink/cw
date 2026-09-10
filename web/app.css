@@ -603,6 +603,39 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
 .sheet-foot .grow { flex: 1; }
 .mono-path { font-family: var(--mono); font-size: 10.5px; color: var(--muted-2); word-break: break-all; }
 
+/* --------------------------------------------------------------- full size */
+
+/* The diagram in a window of its own. In a step it is drawn to fit and a wide
+   one gets small doing it; here it gets the viewport, its own size or larger,
+   and a box that scrolls under it. */
+.zoom {
+  border: 1px solid var(--line); border-radius: 8px; padding: 0;
+  background: var(--surface); color: var(--ink);
+  width: calc(100vw - 40px); height: calc(100vh - 40px);
+  max-width: none; max-height: none;
+  box-shadow: 0 24px 70px oklch(0 0 0 / 0.3);
+}
+.zoom[open] { display: flex; flex-direction: column; }
+.zoom::backdrop { background: oklch(0 0 0 / 0.55); }
+.zoom-head {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft); background: var(--surface-2);
+}
+.zoom-head .kind {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.zoom-head .grow { flex: 1; }
+.zoom-head .x {
+  border: none; background: none; font-size: 18px; color: var(--muted);
+  cursor: pointer; padding: 0 4px;
+}
+.zoom-head .x:hover { color: var(--ink); }
+.zoom-box { flex: 1; overflow: auto; padding: 22px; cursor: grab; }
+.zoom-box.dragging { cursor: grabbing; }
+.zoom-svg { width: max-content; margin: 0 auto; }
+.zoom-box svg { display: block; height: auto; }
+
 /* ------------------------------------------------------------------ toast */
 
 .toast {

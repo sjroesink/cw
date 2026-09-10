@@ -11,7 +11,7 @@
 import {
   $, HOSTED, SOURCE, STAMP, api, toast, el, mdEl, pad2, plural, baseName,
   applyTheme, effectiveDark, settingsStore, clearTimers, copyText,
-  useLinks, openAt, whereOpens,
+  useLinks, openAt, whereOpens, zoomOpen,
 } from "./ui.js";
 import {
   state, doc, parts, partAt, sectionAt, stepsOf, currentStep, totalSteps, stepsIn,
@@ -516,7 +516,7 @@ function wire() {
   window.addEventListener("hashchange", () => { readHash(); render(); });
 
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input, select, textarea") || $("settings").open) return;
+    if (e.target.matches("input, select, textarea") || $("settings").open || zoomOpen()) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     switch (e.key) {
       case "ArrowRight": move(1); break;
