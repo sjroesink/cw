@@ -18,6 +18,7 @@ import {
   isDone, sectionComplete, partComplete, loadProgress, readHash,
   onChange, go, openStep, markDone, moveLabel, move,
 } from "./state.js";
+import * as comments from "./comments.js";
 
 // The renderer for the version in front of us. Nothing draws before load() has
 // picked one.
@@ -147,6 +148,14 @@ function render() {
   if (state.view === "overview") stage.appendChild(viewOverview());
   else if (state.view === "part") stage.appendChild(viewPart());
   else stage.appendChild(viewStep());
+  // Beside the view rather than inside it: a view animates a transform on its
+  // way in, and anything fixed inside a transformed element is fixed to that
+  // element instead of to the screen.
+  stage.appendChild(state.view === "step" ? stepFoot() : pageFoot());
+  // The comments hang off what was just built, and the stage is built again
+  // on every state change, so they are put back on every one of them too.
+  comments.mount(stage);
+  fitFoot();
   window.scrollTo({ top: 0 });
 }
 
@@ -182,7 +191,6 @@ function viewOverview() {
   });
   v.appendChild(grid);
   if (HOSTED) v.appendChild(localBlock());
-  v.appendChild(pageFoot());
   return v;
 }
 
@@ -278,7 +286,6 @@ function viewPart() {
     list.appendChild(row);
   });
   v.appendChild(list);
-  v.appendChild(pageFoot());
   return v;
 }
 
@@ -306,12 +313,13 @@ function viewStep() {
 
   v.appendChild(el("h2", "step-title", step.title));
   R.step(step, v);
-  v.appendChild(stepFoot());
   return v;
 }
 
 function stepFoot() {
-  const foot = el("div", "stepfoot");
+  const bar = el("div", "stepfoot");
+  const foot = el("div", "foot-inner");
+  bar.appendChild(foot);
   const prev = el("button", "nav", moveLabel(-1));
   prev.type = "button";
   prev.addEventListener("click", () => move(-1));
@@ -327,13 +335,15 @@ function stepFoot() {
   next.type = "button";
   next.addEventListener("click", () => move(1));
   foot.appendChild(next);
-  return foot;
+  return bar;
 }
 
 // The overview and the part pages get the same two buttons, so the arrow keys
 // have something visible behind them wherever the reader is.
 function pageFoot() {
-  const foot = el("div", "stepfoot");
+  const bar = el("div", "stepfoot");
+  const foot = el("div", "foot-inner");
+  bar.appendChild(foot);
   const prev = el("button", "nav", moveLabel(-1));
   prev.type = "button";
   prev.addEventListener("click", () => move(-1));
@@ -342,7 +352,7 @@ function pageFoot() {
   next.type = "button";
   next.addEventListener("click", () => move(1));
   foot.appendChild(next);
-  return foot;
+  return bar;
 }
 
 /* ------------------------------------------------------------------ settings */
@@ -449,6 +459,35 @@ function firstCode() {
   return null;
 }
 
+/* The foot is fixed, so it does not know which column it is in. The stage
+   does, and it is the thing that moves when the rail turns into a drawer or
+   the comment column opens, so it is asked rather than worked out from the
+   widths those two happen to have today. On a narrow screen the bar is the
+   width of the screen and there is nothing to measure. */
+const wide = window.matchMedia("(min-width: 901px)");
+
+function fitFoot() {
+  const foot = document.querySelector(".stepfoot");
+  if (!foot) return;
+  if (!wide.matches) {
+    foot.style.left = "";
+    foot.style.width = "";
+    return;
+  }
+  const box = $("stage").getBoundingClientRect();
+  foot.style.left = Math.round(box.left) + "px";
+  foot.style.width = Math.round(box.width) + "px";
+}
+
+function drawer(open) {
+  document.querySelector(".rail").classList.toggle("open", open);
+  $("scrim").hidden = !open;
+  $("btnMenu").setAttribute("aria-expanded", open ? "true" : "false");
+  // A page that scrolls behind an open drawer is a page you lose your place
+  // in while trying to pick a part.
+  document.body.classList.toggle("locked", open);
+}
+
 function fatal(message) {
   $("boot").textContent = "";
   const box = el("div");
@@ -477,6 +516,7 @@ async function load() {
   }
   R = await rendererFor(version);
   useLinks(data.github, state.data.settings.ide);
+  comments.seed(data);
 
   loadProgress();
   readHash();
@@ -513,20 +553,47 @@ function wire() {
     } catch (err) { toast(String(err.message || err), true); }
   });
 
+  /* The rail is a column on a desk and a drawer on a phone. Anything chosen
+     in it is a move to somewhere else, so it closes behind you. */
+  const rail = document.querySelector(".rail");
+  $("btnMenu").addEventListener("click", () => drawer(!rail.classList.contains("open")));
+  $("scrim").addEventListener("click", () => drawer(false));
+  rail.addEventListener("click", () => drawer(false));
+
+  /* A phone screen is mostly height, and a header that is always there costs
+     a tenth of it. Reading down puts it away; the first move back up brings
+     it back, wherever you are, because that is when somebody wants it. */
+  let lastY = window.scrollY;
+  window.addEventListener("scroll", () => {
+    const y = Math.max(0, window.scrollY);
+    const top = document.querySelector(".top");
+    if (y < 64 || y < lastY - 4) top.classList.remove("away");
+    else if (y > lastY + 4) top.classList.add("away");
+    lastY = y;
+  }, { passive: true });
+
+  // Anything that changes the reading column changes its size with it: the
+  // window, the drawer, the comment column opening or being dragged wider.
+  new ResizeObserver(fitFoot).observe($("stage"));
+  wide.addEventListener("change", fitFoot);
+
   window.addEventListener("hashchange", () => { readHash(); render(); });
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, select, textarea") || $("settings").open || zoomOpen()) return;
+    if (comments.busy()) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     switch (e.key) {
       case "ArrowRight": move(1); break;
       case "ArrowLeft": move(-1); break;
       case "Escape":
-        if (state.view === "step") go({ view: "part", section: null });
+        if (document.querySelector(".rail").classList.contains("open")) drawer(false);
+        else if (state.view === "step") go({ view: "part", section: null });
         else if (state.view === "part") go({ view: "overview", part: null, section: null });
         break;
       case "t": toggleTheme(); break;
       case "s": openSettings(); break;
+      case "c": comments.toggle(); break;
       case "o": {
         const st = currentStep();
         const found = st && R.stepCode(st);
@@ -547,10 +614,11 @@ function wire() {
      far less often and asks a smaller endpoint. */
   const stateURL = HOSTED ? SOURCE + "/state" : "/api/state";
   setInterval(async () => {
-    if (document.hidden || !state.data || !$("btnReload").hidden) return;
+    if (document.hidden || !state.data) return;
     try {
       const r = await api(stateURL);
-      if (r.stamp && r.stamp !== state.stamp) {
+      await comments.fold(r);
+      if (r.stamp && r.stamp !== state.stamp && $("btnReload").hidden) {
         $("btnReload").textContent = HOSTED ? "this was republished, reload" : "the code changed, reload";
         $("btnReload").hidden = false;
       }

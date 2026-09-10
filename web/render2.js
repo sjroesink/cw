@@ -7,8 +7,8 @@
    of any of them, so that is what it does. */
 
 import {
-  HOSTED, el, mdEl, mdInline, baseName, drawMermaid, openDiagram, highlightInto, langFor,
-  fileName, openButton, openAt, every,
+  HOSTED, el, mdEl, mdInline, mdBlock, baseName, drawMermaid, openDiagram, highlightInto,
+  langFor, fileName, openButton, openAt, every,
 } from "./ui.js";
 import { state, doc, parts, setUI, setSticky, go, openStep } from "./state.js";
 
@@ -49,6 +49,10 @@ export default {
       // diff, so it is set here and the builders only say what they are.
       node.classList.add("block");
       if (b.id) node.dataset.block = b.id;
+      // And what a comment hangs on. A block without an id is addressed by
+      // where it sits, which is enough for as long as the step is open.
+      node.dataset.anchor = b.id || "#" + i;
+      node.dataset.kind = anchorKind(b.type);
       if (b.id && ui().focus === b.id) {
         node.classList.add("focus");
         // A diagram in the step before this one sent the reader here, so put
@@ -60,6 +64,24 @@ export default {
     }
   },
 };
+
+/* The blocks of something that is not a step. A comment's answer is written
+   in the same seven, so it is drawn by the same builders rather than by a
+   second set that would drift from these.
+
+   The keys are prefixed because the panel state they address (which note is
+   open, which frame a timeline is on) is a document-wide bag, and block 0 of
+   an answer is not block 0 of the step behind it. */
+export function blocks(list, key) {
+  const frag = document.createDocumentFragment();
+  for (const [i, b] of (list || []).entries()) {
+    const node = blockNode(b, key + i);
+    if (!node) continue;
+    node.classList.add("block");
+    frag.appendChild(node);
+  }
+  return frag;
+}
 
 function blockNode(b, i) {
   switch (b.type) {
@@ -76,161 +98,22 @@ function blockNode(b, i) {
   return el("p", "block-unknown", "This step has a " + b.type + " block, which this reader does not know.");
 }
 
+/* Three kinds of thing to select in, and they differ in what can be marked
+   back up afterwards. Code is marked by the line, because the highlighter
+   owns what is inside a line and wants exactly one span per line. Prose is
+   marked by finding the words again. The rest keeps the comment without
+   drawing on it: a mermaid drawing and a diff have no words of their own to
+   put a mark around. */
+function anchorKind(type) {
+  if (type === "code") return "code";
+  if (type === "markdown" || type === "callout" || type === "extension") return "text";
+  return "block";
+}
+
 function shortRepo(url) {
   if (!url) return "";
   const bits = String(url).replace(/^[a-z]+:\/\//i, "").replace(/\.git$/, "").split("/").filter(Boolean);
   return bits.length >= 3 ? bits.slice(-2).join("/") : bits.slice(1).join("/");
-}
-
-/* ------------------------------------------------------------------ markdown */
-
-/*
-cw/1's prose fields held one paragraph, so inline markdown was the whole of it.
-A cw/2 markdown block is a block: it can be several paragraphs, a list, a quote
-or a fenced example.
-
-What a reader has to support is written down in spec/FORMAT.md, and this is that
-list and nothing more. Anything outside it stays the characters the author
-typed, which is conformant and is also what keeps this safe: it builds nodes and
-never touches innerHTML, on a site that serves every walkthrough from one origin.
-*/
-function mdBlock(text) {
-  const box = el("div", "md");
-  box.appendChild(mdBlocks(String(text || "")));
-  return box;
-}
-
-function mdBlocks(text) {
-  const frag = document.createDocumentFragment();
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) { i++; continue; }
-
-    const fence = /^(```|~~~)[ \t]*([A-Za-z0-9+#._-]*)[ \t]*$/.exec(line);
-    if (fence) {
-      const body = [];
-      i++;
-      while (i < lines.length && lines[i].trimEnd() !== fence[1]) body.push(lines[i++]);
-      i++; // the closing fence, or the end of the text
-      const pre = el("pre", "fence");
-      const code = el("code");
-      body.forEach((t, n) => {
-        if (n) code.appendChild(document.createTextNode("\n"));
-        code.appendChild(el("span", "t", t));
-      });
-      pre.appendChild(code);
-      frag.appendChild(pre);
-      highlightInto(pre, body.join("\n"), langFor("", fence[2], ""));
-      continue;
-    }
-
-    const heading = /^(#{1,6})[ \t]+(.*?)[ \t]*#*$/.exec(line);
-    if (heading) {
-      // A step already owns the h2, so the deepest a block goes is h3, and
-      // everything under it flattens rather than running past h6.
-      const level = Math.min(3 + heading[1].length - 1, 5);
-      frag.appendChild(mdEl("h" + level, "md-h", heading[2]));
-      i++;
-      continue;
-    }
-
-    if (/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line)) {
-      frag.appendChild(el("hr"));
-      i++;
-      continue;
-    }
-
-    if (/^ {0,3}>/.test(line)) {
-      const body = [];
-      while (i < lines.length && (/^ {0,3}>/.test(lines[i]) || (body.length && lines[i].trim()))) {
-        body.push(lines[i++].replace(/^ {0,3}>[ \t]?/, ""));
-      }
-      const q = el("blockquote");
-      q.appendChild(mdBlocks(body.join("\n")));
-      frag.appendChild(q);
-      continue;
-    }
-
-    if (listStart(line)) {
-      const [list, next] = readList(lines, i);
-      frag.appendChild(list);
-      i = next;
-      continue;
-    }
-
-    const body = [];
-    while (i < lines.length && lines[i].trim() && !listStart(lines[i]) &&
-      !/^ {0,3}>/.test(lines[i]) && !/^(```|~~~)/.test(lines[i]) && !/^#{1,6}[ \t]/.test(lines[i])) {
-      body.push(lines[i++]);
-    }
-    frag.appendChild(paragraph(body));
-  }
-  return frag;
-}
-
-const listStart = (line) => /^([ \t]*)([-*+]|\d+[.)])[ \t]+/.test(line);
-
-// A line that ends in two spaces or a backslash is a break the author meant.
-function paragraph(body) {
-  const p = el("p");
-  body.forEach((line, n) => {
-    if (n) p.appendChild(el("br"));
-    p.appendChild(mdInline(line.replace(/[ \t]{2,}$/, "").replace(/\\$/, "").trim()));
-  });
-  return p;
-}
-
-function readList(lines, from) {
-  const first = /^([ \t]*)([-*+]|\d+[.)])[ \t]+/.exec(lines[from]);
-  const indent = first[1].length;
-  const ordered = /\d/.test(first[2]);
-  const list = el(ordered ? "ol" : "ul", "md-list");
-
-  let i = from;
-  let item = null;
-  let own = [];
-
-  const close = () => {
-    if (!item) return;
-    item.appendChild(mdBlocks(own.join("\n")));
-    list.appendChild(item);
-    item = null;
-    own = [];
-  };
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) {
-      // A blank line ends the list unless the next line is still inside it.
-      const next = lines[i + 1];
-      if (!next || !next.trim() || (!listStart(next) && next.search(/\S/) <= indent)) break;
-      own.push("");
-      i++;
-      continue;
-    }
-    const m = /^([ \t]*)([-*+]|\d+[.)])[ \t]+(.*)$/.exec(line);
-    if (m && m[1].length <= indent) {
-      close();
-      item = el("li");
-      own = [m[3]];
-      i++;
-      continue;
-    }
-    if (!item) break;
-    // Anything indented past the marker belongs to the item, nested list and
-    // all, and mdBlocks sorts out which it is.
-    if (line.search(/\S/) > indent) {
-      own.push(line.slice(Math.min(indent + 2, line.search(/\S/))));
-      i++;
-      continue;
-    }
-    break;
-  }
-  close();
-  return [list, i];
 }
 
 /* ------------------------------------------------------------------ code */
@@ -249,6 +132,7 @@ function codeBlock(b, at) {
   const shown = (rel) => first + rel - 1;
 
   const wrap = el("div");
+  if (src) wrap.dataset.file = src.file;
   const open = openAnnotation(s, at);
 
   const box = el("div", "codebox" + (open ? " with-note" : ""));
@@ -273,6 +157,10 @@ function codeBlock(b, at) {
     const on = open && open.index === note;
     const row = el("div", "row" + (added.has(rel) ? " add" : "") + (focus.has(rel) ? " hi" : "") +
       (on ? " open" : "") + (note >= 0 ? " clickable" : ""));
+    // The number in the file, on the row rather than only in the gutter: a
+    // selection dragged across rows becomes a range of lines somebody can
+    // open, and a comment already made finds its rows again.
+    row.dataset.line = String(shown(rel));
 
     const num = el("span", "n" + (src ? " link" : ""), String(shown(rel)));
     if (src) {

@@ -164,6 +164,158 @@ export function mdEl(tag, cls, text) {
   return n;
 }
 
+/*
+cw/1's prose fields held one paragraph, so inline markdown was the whole of it.
+A cw/2 markdown block is a block: it can be several paragraphs, a list, a quote
+or a fenced example.
+
+What a reader has to support is written down in spec/FORMAT.md, and this is that
+list and nothing more. Anything outside it stays the characters the author
+typed, which is conformant and is also what keeps this safe: it builds nodes and
+never touches innerHTML, on a site that serves every walkthrough from one origin.
+*/
+export function mdBlock(text) {
+  const box = el("div", "md");
+  box.appendChild(mdBlocks(String(text || "")));
+  return box;
+}
+
+export function mdBlocks(text) {
+  const frag = document.createDocumentFragment();
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+
+    const fence = /^(```|~~~)[ \t]*([A-Za-z0-9+#._-]*)[ \t]*$/.exec(line);
+    if (fence) {
+      const body = [];
+      i++;
+      while (i < lines.length && lines[i].trimEnd() !== fence[1]) body.push(lines[i++]);
+      i++; // the closing fence, or the end of the text
+      const pre = el("pre", "fence");
+      const code = el("code");
+      body.forEach((t, n) => {
+        if (n) code.appendChild(document.createTextNode("\n"));
+        code.appendChild(el("span", "t", t));
+      });
+      pre.appendChild(code);
+      frag.appendChild(pre);
+      highlightInto(pre, body.join("\n"), langFor("", fence[2], ""));
+      continue;
+    }
+
+    const heading = /^(#{1,6})[ \t]+(.*?)[ \t]*#*$/.exec(line);
+    if (heading) {
+      // A step already owns the h2, so the deepest a block goes is h3, and
+      // everything under it flattens rather than running past h6.
+      const level = Math.min(3 + heading[1].length - 1, 5);
+      frag.appendChild(mdEl("h" + level, "md-h", heading[2]));
+      i++;
+      continue;
+    }
+
+    if (/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line)) {
+      frag.appendChild(el("hr"));
+      i++;
+      continue;
+    }
+
+    if (/^ {0,3}>/.test(line)) {
+      const body = [];
+      while (i < lines.length && (/^ {0,3}>/.test(lines[i]) || (body.length && lines[i].trim()))) {
+        body.push(lines[i++].replace(/^ {0,3}>[ \t]?/, ""));
+      }
+      const q = el("blockquote");
+      q.appendChild(mdBlocks(body.join("\n")));
+      frag.appendChild(q);
+      continue;
+    }
+
+    if (listStart(line)) {
+      const [list, next] = readList(lines, i);
+      frag.appendChild(list);
+      i = next;
+      continue;
+    }
+
+    const body = [];
+    while (i < lines.length && lines[i].trim() && !listStart(lines[i]) &&
+      !/^ {0,3}>/.test(lines[i]) && !/^(```|~~~)/.test(lines[i]) && !/^#{1,6}[ \t]/.test(lines[i])) {
+      body.push(lines[i++]);
+    }
+    frag.appendChild(paragraph(body));
+  }
+  return frag;
+}
+
+const listStart = (line) => /^([ \t]*)([-*+]|\d+[.)])[ \t]+/.test(line);
+
+// A line that ends in two spaces or a backslash is a break the author meant.
+// Every other newline inside a paragraph is how the text was wrapped, and
+// joins, or prose written at a hundred columns arrives as a stack of short
+// lines with the wrapping baked in.
+function paragraph(body) {
+  const p = el("p");
+  body.forEach((line, n) => {
+    if (n) p.appendChild(/([ \t]{2,}|\\)$/.test(body[n - 1]) ? el("br") : document.createTextNode(" "));
+    p.appendChild(mdInline(line.replace(/[ \t]{2,}$/, "").replace(/\\$/, "").trim()));
+  });
+  return p;
+}
+
+function readList(lines, from) {
+  const first = /^([ \t]*)([-*+]|\d+[.)])[ \t]+/.exec(lines[from]);
+  const indent = first[1].length;
+  const ordered = /\d/.test(first[2]);
+  const list = el(ordered ? "ol" : "ul", "md-list");
+
+  let i = from;
+  let item = null;
+  let own = [];
+
+  const close = () => {
+    if (!item) return;
+    item.appendChild(mdBlocks(own.join("\n")));
+    list.appendChild(item);
+    item = null;
+    own = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      // A blank line ends the list unless the next line is still inside it.
+      const next = lines[i + 1];
+      if (!next || !next.trim() || (!listStart(next) && next.search(/\S/) <= indent)) break;
+      own.push("");
+      i++;
+      continue;
+    }
+    const m = /^([ \t]*)([-*+]|\d+[.)])[ \t]+(.*)$/.exec(line);
+    if (m && m[1].length <= indent) {
+      close();
+      item = el("li");
+      own = [m[3]];
+      i++;
+      continue;
+    }
+    if (!item) break;
+    // Anything indented past the marker belongs to the item, nested list and
+    // all, and mdBlocks sorts out which it is.
+    if (line.search(/\S/) > indent) {
+      own.push(line.slice(Math.min(indent + 2, line.search(/\S/))));
+      i++;
+      continue;
+    }
+    break;
+  }
+  close();
+  return [list, i];
+}
+
 /* ------------------------------------------------------------------ theme */
 
 export function applyTheme(settings) {

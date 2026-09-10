@@ -34,17 +34,25 @@ export default {
   },
 
   step(step, host) {
-    host.appendChild(mdEl("p", "step-body", step.body));
+    // cw/1 has slots where cw/2 has a list, so the slot's name is what a
+    // comment hangs on. Same two attributes, same meaning, and the comment
+    // layer above this never learns which version it is reading.
+    const slot = (node, name, kind) => {
+      node.dataset.anchor = name;
+      node.dataset.kind = kind;
+      host.appendChild(node);
+    };
+    slot(mdEl("p", "step-body", step.body), "body", "text");
 
-    if (step.diagram) host.appendChild(panelDiagram(step.diagram));
-    if (step.anim) host.appendChild(panelAnim(step.anim));
-    if (step.diff) host.appendChild(panelDiff(step.diff));
-    if (step.code) host.appendChild(panelCode(step.code));
+    if (step.diagram) slot(panelDiagram(step.diagram), "diagram", "block");
+    if (step.anim) slot(panelAnim(step.anim), "anim", "block");
+    if (step.diff) slot(panelDiff(step.diff), "diff", "block");
+    if (step.code) slot(panelCode(step.code), "code", "code");
     if (step.callout) {
       const c = el("div", "callout");
       c.appendChild(el("span", "label", "Watch out"));
       c.appendChild(mdEl("span", "txt", step.callout));
-      host.appendChild(c);
+      slot(c, "callout", "text");
     }
   },
 };
@@ -178,6 +186,7 @@ function checkTag(check) {
 
 function panelCode(code) {
   const wrap = el("div");
+  wrap.dataset.file = code.file;
   wrap.style.marginBottom = "28px";
 
   const notes = code.notes || [];
@@ -202,6 +211,7 @@ function panelCode(code) {
     const note = notes.find((x) => x.line === n);
     const on = ui().note === n;
     const row = el("div", "row" + (add.has(n) ? " add" : "") + (hi.has(n) ? " hi" : "") + (on ? " open" : "") + (note ? " clickable" : ""));
+    row.dataset.line = String(n);
 
     const num = el("span", "n link", String(n));
     num.title = "open " + code.file + " at line " + n;

@@ -148,6 +148,10 @@ func cmdOpen(args []string) {
 	}
 	fmt.Println()
 
+	// The name it was published under is what its comments are filed under
+	// too, so a question asked yesterday is still there when it is opened
+	// again.
+	f.slug = slug
 	f.file = path
 	runServe(f)
 }

@@ -51,6 +51,12 @@ Sharing one:
           [--worktree | --no-worktree]  add or move a worktree for its commit without asking, or never
   cw worktrees [clean]                  the worktrees cw open added, and removing them
 
+Answering what a reader asks, while one is being served:
+  cw comments [<file, url or name>]     what has been asked, oldest first
+  cw comments watch [target]            wait for one to answer, and take it
+              [--for 10m]               how long to wait before giving up
+  cw comments reply <id> [--text T]     answer it, or --file F, or - for stdin
+
 Serving the site rather than one file:
   cw host [--addr :8080] [--data DIR] [--base-url URL]
   cw keys add <name> | list | rm <name>  [--data DIR]
@@ -85,6 +91,8 @@ func main() {
 		cmdOpen(os.Args[2:])
 	case "worktrees":
 		cmdWorktrees(os.Args[2:])
+	case "comments":
+		cmdComments(os.Args[2:])
 	case "schema":
 		cmdSchema(os.Args[2:])
 	case "ides":
@@ -103,6 +111,7 @@ func main() {
 
 type flags struct {
 	file    string
+	slug    string
 	root    string
 	port    int
 	noOpen  bool
@@ -162,7 +171,9 @@ func atoiOr(s string, def int) int {
 func die(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "cw: "+format+"\n", a...)
 	// Giving up is one of the ways a run ends, so a worktree this one added is
-	// handed back here too. Every run that added none notices nothing.
+	// handed back here too, and the line that says this run is servable goes
+	// with it. Every run that has neither notices nothing.
+	forgetRun(os.Getpid())
 	releaseWorktree()
 	os.Exit(2)
 }
@@ -529,6 +540,12 @@ type server struct {
 	token  string
 	vendor *Vendor
 	web    fs.FS
+
+	// What a reader asked while reading this one. Local only: the hosted
+	// server has no store, no routes for it and no agent to answer with.
+	key      string
+	title    string
+	comments *commentStore
 }
 
 type payload struct {
@@ -547,6 +564,11 @@ type payload struct {
 	Moved    int             `json:"moved"`
 	Stale    int             `json:"stale"`
 	Stamp    string          `json:"stamp"`
+
+	// Set by the local server only, for the same reason the open buttons are:
+	// there is nobody on the other end of a comment on a page nobody is
+	// serving from a terminal.
+	Comments *CommentsView `json:"comments,omitempty"`
 
 	// Set by the hosted server only. The page reads Hosted to decide whether a
 	// line number opens an editor or a link, and everything below it is the
@@ -588,8 +610,10 @@ func runServe(f flags) {
 	if err != nil {
 		die("the web assets are missing from this build: %v", err)
 	}
+	key := commentKey(f.slug, abs)
 	s := &server{file: abs, root: root, dev: f.dev, token: randomToken(),
-		vendor: NewVendor(settings.Offline), web: sub}
+		vendor: NewVendor(settings.Offline), web: sub,
+		key: key, title: res.View().Title, comments: openComments(key, res.View().Title)}
 	s.vendor.Prewarm()
 
 	port := settings.Port
@@ -602,18 +626,13 @@ func runServe(f flags) {
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/", ln.Addr().(*net.TCPAddr).Port)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.Handle("/assets/", cacheAssets(http.StripPrefix("/assets/", s.assets()), s.dev))
-	mux.HandleFunc(vendorPrefix, s.vendor.Handler())
-	mux.HandleFunc("/schema.json", schemaHandler(FormatDefault))
-	mux.HandleFunc("/schema/v1.json", schemaHandler(FormatV1))
-	mux.HandleFunc("/schema/v2.json", schemaHandler(FormatV2))
-	mux.HandleFunc("/api/walkthrough", s.guard(s.handleWalkthrough))
-	mux.HandleFunc("/api/state", s.guard(s.handleState))
-	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
-	mux.HandleFunc("/api/settings", s.guard(s.handleSettings))
-	mux.HandleFunc("/api/ides", s.guard(s.handleIDEs))
+	// cw comments runs in a second terminal and has to find this one. The
+	// line goes when the run does, and one left behind by a kill is dropped
+	// by whoever reads it next.
+	rememberRun(servedRun{PID: os.Getpid(), Port: ln.Addr().(*net.TCPAddr).Port,
+		Token: s.token, Key: key, Title: res.View().Title, File: abs, At: time.Now()})
+
+	mux := s.routes()
 
 	fmt.Printf("%s\n", res.View().Title)
 	fmt.Printf("  url       %s\n", url)
@@ -624,6 +643,7 @@ func runServe(f flags) {
 	}
 	fmt.Printf("  editor    %s\n", describeIDE(settings))
 	fmt.Printf("  settings  %s\n", spath)
+	fmt.Printf("  comments  cw comments watch %s\n", key)
 	if len(res.Errors) > 0 {
 		fmt.Printf("\n%d error(s), shown in the page as well:\n", len(res.Errors))
 		for _, e := range res.Errors {
@@ -654,6 +674,7 @@ func runServe(f flags) {
 	go func() {
 		<-stop
 		fmt.Println()
+		forgetRun(os.Getpid())
 		releaseWorktree()
 		os.Exit(0)
 	}()
@@ -759,6 +780,28 @@ func (s *server) assets() http.Handler {
 	return http.FileServer(http.FS(s.web))
 }
 
+// routes is the whole local surface in one place, so a test drives the
+// server through the same mux a browser does rather than a handler picked
+// out by hand. The hosted server has its own, and the two overlap only in
+// what a walkthrough is read against: the schema and the assets.
+func (s *server) routes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleIndex)
+	mux.Handle("/assets/", cacheAssets(http.StripPrefix("/assets/", s.assets()), s.dev))
+	mux.HandleFunc(vendorPrefix, s.vendor.Handler())
+	mux.HandleFunc("/schema.json", schemaHandler(FormatDefault))
+	mux.HandleFunc("/schema/v1.json", schemaHandler(FormatV1))
+	mux.HandleFunc("/schema/v2.json", schemaHandler(FormatV2))
+	mux.HandleFunc("/api/walkthrough", s.guard(s.handleWalkthrough))
+	mux.HandleFunc("/api/state", s.guard(s.handleState))
+	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
+	mux.HandleFunc("/api/settings", s.guard(s.handleSettings))
+	mux.HandleFunc("/api/ides", s.guard(s.handleIDEs))
+	mux.HandleFunc("/api/comments", s.guard(s.handleComments))
+	mux.HandleFunc("/api/comments/", s.guard(s.handleComment))
+	return mux
+}
+
 // guard keeps another page in the browser from driving this server. Everything
 // under /api needs the token the page was served with, and a cross-origin
 // caller is turned away before anything is read or opened.
@@ -836,10 +879,12 @@ func (s *server) build() (*payload, error) {
 	if err != nil {
 		return nil, err
 	}
+	comments := s.commentsView()
 	return &payload{
 		Doc: raw, Root: filepath.ToSlash(s.root), RootName: rootName(s.root),
 		File: filepath.ToSlash(s.file), Settings: settings, SetPath: spath, IDEs: DetectIDEs(),
 		Errors: res.Errors, Warnings: res.Warnings, Moved: moved, Stale: stale, Stamp: s.stamp(view),
+		Comments: &comments,
 	}, nil
 }
 
@@ -884,7 +929,9 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"stamp": "unreadable", "fatal": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stamp": s.stamp(res.View())})
+	rev, watching := s.comments.state()
+	writeJSON(w, http.StatusOK, map[string]any{"stamp": s.stamp(res.View()),
+		"comments": map[string]any{"rev": rev, "watching": watching}})
 }
 
 func (s *server) handleIDEs(w http.ResponseWriter, r *http.Request) {

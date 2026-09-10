@@ -46,6 +46,36 @@ need to know about it.
 a highlighted line inside its snippet, an id unique among its siblings, an anchor matching the text
 under it. New checks go there, and errors refuse while warnings do not.
 
+## Comments belong to the reading, not to the walkthrough
+
+A walkthrough served locally can be asked questions: somebody selects code or prose, leaves a
+comment, and an agent answers it through `cw comments`. `comments.go` is the whole of it, and
+three things keep it from spreading.
+
+**It is not in the document.** A question somebody had while reading is a fact about that
+reading, the same way `root` was a fact about the machine rather than about the change. No field,
+no eighth block type, no `ext` key, and `TestACommentIsNeverWrittenIntoTheWalkthrough` is what
+says so. The threads live in `comments/<key>.json` beside the settings, filed under the published
+name when there is one, because `cw open` serves a copy out of a temp directory and a file next
+to somebody's walkthrough gets committed by accident.
+
+**The server is the only writer.** The command talks to the running server over loopback rather
+than editing the same file from a second process, which is what makes handing one comment to one
+watcher a decision taken in one place. `servers.json` is how it finds that server, and it holds
+the token the page already carries, because without it the command cannot pass the guard that
+keeps other pages out.
+
+**The site has none of it.** No routes, no store, no column. There is no agent behind
+cw.roesink.dev, and a write path for anonymous readers is not something `gate.go` should have to
+guard.
+
+Two things follow from those and are worth knowing before changing this. An answer may be written
+in the seven blocks a step is written in, and then it is drawn by `render2.js` rather than by a
+second renderer that would drift: `blockSchema` lifts `$defs/block` out of the v2 schema and holds
+a reply to that and nothing more, because the rules `inspect2` adds are about a document somebody
+publishes. And nothing removes a comment. Archiving takes it out of the column and out of what a
+watcher is handed; the file is a file, for the day somebody really does want one gone.
+
 ## The format is versioned, and other people may read it
 
 `cw/2` is what a new walkthrough is written as, and `cw/1` is still read, still published and still

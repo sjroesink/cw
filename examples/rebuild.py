@@ -174,7 +174,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 765, 777, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[767, 771]),
+                            "code": code("main.go", 808, 820, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[810, 814]),
                         },
                         {
                             "title": "A path is checked, not cleaned",
@@ -279,7 +279,7 @@ WALKTHROUGH = {
                                 "anchors. So the page does no hashing, makes no request, and the same function "
                                 "in the same file serves both the local button and the hosted one."
                             ),
-                            "code": code("web/ui.js", 449, 471, "export function openButton(file, line, cls, to) {", lang="javascript", hi=[450, 465]),
+                            "code": code("web/ui.js", 720, 742, "export function openButton(file, line, cls, to) {", lang="javascript", hi=[721, 736]),
                         },
                     ],
                 },

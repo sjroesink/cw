@@ -322,3 +322,13 @@ Progress is per walkthrough, in the reader's own browser: which steps are marked
 goes back to the server, and nothing is shared between readers. The address bar carries
 `#part-id/section-id/step-id`, so a link to one step is a link to that step, and back and forward
 walk the way the reader came.
+
+Read locally, it remembers one more thing, and that one is not in the browser. A comment left on a
+selection is kept by the server that is serving the walkthrough, beside the settings and filed under
+the name it was published as, so it is still there the next time the same walkthrough is opened.
+`cw comments` is how an agent reads and answers them, and an answer may be written in these same
+blocks: a question about a function is answered best by that function, at its own line numbers.
+
+None of that touches the document. A walkthrough with fifty comments on it publishes as the same
+bytes as one with none: the comments are about a reading, and the file is about the change. Nothing
+in this reference is where they go, and there is no field to add for them.

@@ -22,6 +22,9 @@ cw publish <walkthrough.json> [--slug NAME] [--new] [--force]
 cw open <url or name> [--root DIR]         read a published one with the local buttons
         [--worktree | --no-worktree]       add or move a worktree for its commit without asking, or never
 cw worktrees [clean]                       the worktrees cw open added, and removing them
+cw comments [<file, url or name>]          what a reader asked, while one is being served
+cw comments watch [target] [--for 10m]     wait for one to answer, and take it
+cw comments reply <id> [--file F]          answer it, or --text T, or - for stdin
 cw migrate <walkthrough.json> [--to cw/2]  fill in ids and anchors, or lift a cw/1 file
 cw schema [--write]                        print the JSON schema, or write a copy to point at
 cw ides                                    list the editors found on this machine
@@ -77,6 +80,30 @@ to undo.
 worktree with work in it is never removed and never moved, and `cw worktrees` is what finds the ones
 a killed run left behind.
 
+## Asking about what is on the screen
+
+A walkthrough being served locally can be asked questions. Select a few lines of code or half a
+sentence of prose, leave a comment, and it appears in a column beside the text with the words it
+is about still marked in place.
+
+`cw comments watch` in the terminal next to it waits until there is one, takes it, and prints
+where it hangs: the step, the file and the lines. The page says that somebody picked it up while
+it is being written, and shows the answer when `cw comments reply` sends it back. When nothing is
+listening the page says that too, and offers the prompt to paste into an agent.
+
+An answer is markdown, or the same seven blocks a step is written in. Send a JSON array of blocks
+instead of prose and the page draws them with the renderer it draws the walkthrough with: line
+numbers that open the editor, a mermaid diagram, a callout. They are held to the block definition
+in the schema and to nothing else, because a reply is not a published document and the rules
+about hashes and unique ids are about one.
+
+Nothing deletes a comment. The button archives it, which takes it out of the column and out of
+what a watcher is handed, and a checkbox puts the archive back on the screen.
+
+The threads are kept beside the settings, filed under the name the walkthrough was published as,
+so they are still there the next time it is opened. They never go into the walkthrough, and the
+site has none of this: there is nobody in a terminal there to answer.
+
 ## The format
 
 One JSON file per topic, written against `schema/walkthrough.v2.schema.json`. Point at it from the
@@ -127,7 +154,8 @@ while you write.
 - Answer a request from another page. Everything under `/api` needs the token stamped into the page
   at load, and a cross-origin caller is turned away first.
 - Listen anywhere but `127.0.0.1`.
-- Write to your code. The only things it writes are the settings file and the asset cache.
+- Write to your code. It writes the settings file, the asset cache, and the comments left on a
+  walkthrough, which go beside the settings and never into the walkthrough itself.
 
 ## Offline
 
