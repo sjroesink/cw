@@ -270,7 +270,7 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
   text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
 }
 .lede {
-  max-width: 62ch; font-size: 17px; line-height: 1.6; color: var(--ink-2);
+  max-width: 62ch; font-size: 17px; line-height: 1.8; color: var(--ink-2);
   text-wrap: pretty; margin-bottom: 36px;
 }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
@@ -312,7 +312,7 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
 .trail .sep { opacity: 0.45; }
 
 .part-title { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; max-width: 24ch; margin-bottom: 12px; }
-.part-long { max-width: 60ch; font-size: 16px; line-height: 1.6; color: var(--muted); text-wrap: pretty; margin-bottom: 34px; }
+.part-long { max-width: 60ch; font-size: 16px; line-height: 1.8; color: var(--muted); text-wrap: pretty; margin-bottom: 34px; }
 .sections { display: flex; flex-direction: column; gap: 12px; }
 .section-row {
   display: flex; align-items: center; gap: 20px; padding: 20px 22px;
@@ -340,11 +340,9 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
 .dot-btn:hover { border-color: var(--accent); }
 .dot-btn.done { background: var(--ok-wash); }
 .dot-btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.dots .grow { flex: 1; }
-.counter { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
 .step-title { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; max-width: 26ch; margin-bottom: 16px; }
-.step-body { max-width: 66ch; font-size: 16.5px; line-height: 1.65; color: var(--ink-2); text-wrap: pretty; margin-bottom: 32px; }
+.step-body { max-width: 66ch; font-size: 16.5px; line-height: 1.8; color: var(--ink-2); text-wrap: pretty; margin-bottom: 32px; }
 
 .panel {
   border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
@@ -466,7 +464,7 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
   background: oklch(0.52 0.14 255 / 0.07);
 }
 .linenote .at { font-family: var(--mono); font-size: 10.5px; color: var(--accent-ink); white-space: nowrap; padding-top: 3px; }
-.linenote .txt { flex: 1; font-size: 14.5px; line-height: 1.6; color: var(--note-ink); text-wrap: pretty; }
+.linenote .txt { flex: 1; font-size: 14.5px; line-height: 1.8; color: var(--note-ink); text-wrap: pretty; }
 .linenote .x { border: none; background: none; font-family: var(--mono); font-size: 12px; color: var(--accent-ink); cursor: pointer; padding: 0 2px; }
 .notes-hint { padding: 9px 4px 0; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
@@ -550,7 +548,7 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--warn-label); white-space: nowrap; padding-top: 2px;
 }
-.callout .txt { font-size: 15px; line-height: 1.6; color: var(--warn-ink); text-wrap: pretty; }
+.callout .txt { font-size: 15px; line-height: 1.8; color: var(--warn-ink); text-wrap: pretty; }
 
 /* ------------------------------------------------------------------ foot */
 
@@ -570,8 +568,6 @@ a:hover { color: var(--accent-ink); text-decoration: underline; }
   color: var(--on-accent); margin-left: auto;
 }
 .nav.next:hover { filter: brightness(0.92); color: var(--on-accent); }
-.keys { font-family: var(--mono); font-size: 10.5px; color: var(--muted-2); margin-left: auto; }
-.stepfoot .nav.next + .keys, .keys + .nav.next { margin-left: 12px; }
 
 /* ------------------------------------------------------------------ settings */
 
@@ -741,7 +737,7 @@ code.md {
 
 /* Block markdown. The inline subset is unchanged; this is the rest of the small
    list a reader has to support, and nothing beyond it. */
-.md { max-width: 66ch; font-size: 16.5px; line-height: 1.65; color: var(--ink-2); text-wrap: pretty; }
+.md { max-width: 66ch; font-size: 16.5px; line-height: 1.8; color: var(--ink-2); text-wrap: pretty; }
 .md > *:first-child { margin-top: 0; }
 .md > *:last-child { margin-bottom: 0; }
 .md p { margin: 0 0 14px; }

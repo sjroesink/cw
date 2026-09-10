@@ -302,8 +302,6 @@ function viewStep() {
     b.addEventListener("click", () => openStep(state.part, state.section, i));
     dots.appendChild(b);
   });
-  dots.appendChild(el("span", "grow"));
-  dots.appendChild(el("span", "counter", "step " + (state.step + 1) + " of " + sec.steps.length));
   v.appendChild(dots);
 
   v.appendChild(el("h2", "step-title", step.title));
@@ -325,8 +323,6 @@ function stepFoot() {
   mark.addEventListener("click", () => markDone(state.part, state.section, state.step, !done));
   foot.appendChild(mark);
 
-  foot.appendChild(el("span", "keys", "← → keys"));
-
   const next = el("button", "nav next", moveLabel(1));
   next.type = "button";
   next.addEventListener("click", () => move(1));
@@ -342,7 +338,6 @@ function pageFoot() {
   prev.type = "button";
   prev.addEventListener("click", () => move(-1));
   foot.appendChild(prev);
-  foot.appendChild(el("span", "keys", "← → keys"));
   const next = el("button", "nav next", moveLabel(1));
   next.type = "button";
   next.addEventListener("click", () => move(1));
