@@ -111,7 +111,7 @@ func TestAnUnknownBlockKindIsOneSentence(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected one complaint, got %d:\n%s", len(got), strings.Join(got, "\n"))
 	}
-	wants(t, got, `"codeblock" is not one of`, "callout, code, diagram, diff, extension, markdown, timeline")
+	wants(t, got, `"codeblock" is not one of`, "callout, code, diagram, diff, extension, markdown, reference, timeline")
 }
 
 // And once the kind is known, the complaints are that kind's own.
@@ -125,7 +125,7 @@ func TestABlockIsCheckedAgainstTheKindItSaysItIs(t *testing.T) {
 
 func TestABlockWithNoKindSaysWhichOnesThereAre(t *testing.T) {
 	wants(t, check(t, FormatV2, v2doc(`{"text":"x"}`)),
-		"is missing, and it is what says which kind this is", "markdown, timeline")
+		"is missing, and it is what says which kind this is", "markdown, reference, timeline")
 }
 
 // dependentRequired: endLine on its own is a line range with no beginning.

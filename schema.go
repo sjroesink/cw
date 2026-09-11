@@ -135,6 +135,9 @@ func (d *schemaDoc) addPattern(src string) error {
 	if re, err := regexp.Compile(re2Source(src)); err == nil {
 		d.pats[src] = &pattern{re: re}
 		return nil
+	} else if strings.HasPrefix(src, `^(?:\./)?`) {
+		d.pats[src] = &pattern{match: func(s string) bool { return portablePath(strings.TrimPrefix(s, "./")) }}
+		return nil
 	} else if strings.HasPrefix(src, pathGuard) {
 		d.pats[src] = &pattern{match: portablePath}
 		return nil

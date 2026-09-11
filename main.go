@@ -65,6 +65,7 @@ Flags for serve and check:
   --root DIR     the checkout the file paths are relative to
   --port N       serve on this port (serve only, default: a free one)
   --no-open      do not launch a browser (serve only)
+  --comment-key NAME  share local comments with this published name (serve only)
   --offline      never reach for the network, use the asset cache only
   --dev          read the web assets from disk instead of the binary
 `
@@ -141,6 +142,8 @@ func parseFlags(args []string, wantFile bool) flags {
 			f.port = atoiOr(strings.TrimPrefix(a, "--port="), -1)
 		case a == "--no-open":
 			f.noOpen = true
+		case a == "--comment-key":
+			f.slug = next()
 		case a == "--offline":
 			f.offline = true
 		case a == "--dev":
@@ -543,9 +546,11 @@ type server struct {
 
 	// What a reader asked while reading this one. Local only: the hosted
 	// server has no store, no routes for it and no agent to answer with.
-	key      string
-	title    string
-	comments *commentStore
+	key                string
+	title              string
+	comments           *commentStore
+	port               int
+	referencesRegistry *referenceRegistry
 }
 
 type payload struct {
@@ -625,6 +630,7 @@ func runServe(f flags) {
 		die("cannot listen on port %d: %v", port, err)
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/", ln.Addr().(*net.TCPAddr).Port)
+	s.port = ln.Addr().(*net.TCPAddr).Port
 
 	// cw comments runs in a second terminal and has to find this one. The
 	// line goes when the run does, and one left behind by a kill is dropped
@@ -786,6 +792,9 @@ func (s *server) assets() http.Handler {
 // what a walkthrough is read against: the schema and the assets.
 func (s *server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
+	if s.referencesRegistry == nil {
+		s.referencesRegistry = &referenceRegistry{mux: mux, opened: map[string]string{s.file: "/"}}
+	}
 	mux.HandleFunc("/", s.handleIndex)
 	mux.Handle("/assets/", cacheAssets(http.StripPrefix("/assets/", s.assets()), s.dev))
 	mux.HandleFunc(vendorPrefix, s.vendor.Handler())
@@ -793,6 +802,7 @@ func (s *server) routes() *http.ServeMux {
 	mux.HandleFunc("/schema/v1.json", schemaHandler(FormatV1))
 	mux.HandleFunc("/schema/v2.json", schemaHandler(FormatV2))
 	mux.HandleFunc("/api/walkthrough", s.guard(s.handleWalkthrough))
+	mux.HandleFunc("/api/reference", s.guard(s.references()))
 	mux.HandleFunc("/api/state", s.guard(s.handleState))
 	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
 	mux.HandleFunc("/api/settings", s.guard(s.handleSettings))

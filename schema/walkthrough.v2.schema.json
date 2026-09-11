@@ -646,6 +646,34 @@
         "ext": { "$ref": "#/$defs/ext" }
       }
     },
+    "referenceTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [{ "required": ["file"] }, { "required": ["url"] }],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^(?:\\./)?(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[^\\\\/:\\u0000-\\u001f\\u007f]+(?:/[^\\\\/:\\u0000-\\u001f\\u007f]+)*$(?![\\s\\S])",
+          "description": "JSON path relative to the containing walkthrough directory. An optional ./ prefix is allowed. Empty, dot and parent segments are forbidden; readers enforce containment including symlinks."
+        },
+        "url": { "$ref": "#/$defs/url" },
+        "stepId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "referenceBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title", "target"],
+      "properties": {
+        "type": { "const": "reference" },
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "$ref": "#/$defs/markdown" },
+        "relation": { "type": "string", "enum": ["related", "deep-dive", "prerequisite", "next"] },
+        "target": { "$ref": "#/$defs/referenceTarget" },
+        "ext": { "$ref": "#/$defs/ext" }
+      }
+    },
     "extensionBlock": {
       "type": "object",
       "additionalProperties": false,
@@ -675,7 +703,8 @@
         { "$ref": "#/$defs/diagramBlock" },
         { "$ref": "#/$defs/diffBlock" },
         { "$ref": "#/$defs/timelineBlock" },
-        { "$ref": "#/$defs/extensionBlock" }
+        { "$ref": "#/$defs/extensionBlock" },
+        { "$ref": "#/$defs/referenceBlock" }
       ]
     },
     "step": {

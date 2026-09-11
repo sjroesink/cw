@@ -110,7 +110,7 @@ WALKTHROUGH = {
                                 "caption": "One document, and more than one thing that can read it.",
                                 "def": "flowchart LR\n  json[\"walkthrough.json\"] --> schema[\"walkthrough.schema.json\"]\n  schema --> local[\"cw serve\"]\n  schema --> host[\"cw host\"]\n  local --> tree[\"your working tree\"]\n  host --> gh[\"GitHub\"]\n  json -.-> other[\"an editor plugin,\\nsomething that reads it aloud\"]",
                                 "refs": {
-                                    "schema": ref("schema.go", 233, 242, "func (v *validator) walk(at string, value any, sch map[string]any) {", "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
+                                    "schema": ref("schema.go", 236, 245, "func (v *validator) walk(at string, value any, sch map[string]any) {", "The same schema an editor validates against is enforced here, so the two cannot drift apart."),
                                 },
                             },
                         },
@@ -174,7 +174,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 808, 820, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[810, 814]),
+                            "code": code("main.go", 818, 830, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[820, 824]),
                         },
                         {
                             "title": "A path is checked, not cleaned",
@@ -279,7 +279,7 @@ WALKTHROUGH = {
                                 "anchors. So the page does no hashing, makes no request, and the same function "
                                 "in the same file serves both the local button and the hosted one."
                             ),
-                            "code": code("web/ui.js", 745, 764, "export function openButton(file, line, cls, to) {", lang="javascript", hi=[746, 761]),
+                            "code": code("web/ui.js", 747, 766, "export function openButton(file, line, cls, to) {", lang="javascript", hi=[748, 763]),
                         },
                     ],
                 },

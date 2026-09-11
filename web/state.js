@@ -5,7 +5,7 @@
    is what lets one file do this for both. What differs is only what is inside a
    step, and that is the renderer's business. */
 
-import { SLUG } from "./ui.js";
+import { SLUG, toast } from "./ui.js";
 
 export const state = {
   data: null,
@@ -110,6 +110,16 @@ function saveProgress() {
 // still read, because links to it are already out there.
 export function readHash() {
   const h = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+  if (h.startsWith('step=')) {
+    const id = h.slice(5);
+    for (const [p, part] of parts().entries()) for (const [s, section] of part.sections.entries()) {
+      const i = section.steps.findIndex(step => step.id === id);
+      if (i >= 0) { Object.assign(state, { view: 'step', part: p, section: s, step: i }); return; }
+    }
+    Object.assign(state, { view: 'overview', part: null, section: null });
+    toast('The referenced step was not found. Showing the overview.', true);
+    return;
+  }
   if (!h) { state.view = "overview"; state.part = null; state.section = null; return; }
   const found = h.includes("/") ? locateByID(h.split("/")) : locateByNumber(h);
   if (!found) return;

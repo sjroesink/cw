@@ -27,8 +27,14 @@ The promise for `cw/2`:
 - New fields are optional, and a document without them stays valid.
 - New values may appear in an enum. A consumer treats a value it does not know the way it treats a
   block it cannot render: it falls back, it does not fail.
-- **No new block type.** The seven are the seven. Anything else goes in `extension`, which is the
-  one place the format has no opinion about and the one place a reader is told how to cope.
+- Standard block types may be added within cw/2. This revision adds `reference` as the eighth
+  type. Existing documents remain valid; older strict readers must be upgraded to accept
+  documents using it. Readers should show an unsupported-block notice for unknown types.
+  Custom content still uses `extension` with its required fallback.
+
+This explicitly replaces the earlier cw/2 promise of a fixed seven-type vocabulary. Schema and
+reader releases must accompany new standard types; version `cw/2` alone does not identify which
+additions an installed reader supports.
 
 Anything that breaks one of those gets a new version string, and both versions are served. `cw/1` is
 still served, still read and still published: see `FORMAT-v1.md`.
@@ -45,7 +51,7 @@ walkthrough
       steps[]                 one screen, one idea
         id, title, speech?, ext?
         blocks[]              what the step is made of, in the order it is read
-          markdown | code | callout | diagram | diff | timeline | extension
+          markdown | code | callout | diagram | diff | timeline | reference | extension
 ```
 
 Three levels, and each one is somewhere a reader can be. Two to five steps in a section, two to four
@@ -68,11 +74,11 @@ say, which is the whole reason this version exists.
 | `diagram` | `format` (`mermaid`), `text`, a required `alt`, an optional `caption` and `links[]` |
 | `diff` | `before`/`after` locations and `hunks[]` in unified-diff coordinates |
 | `timeline` | `nodes[]` and `frames[]`, each frame a complete picture |
+| `reference` | `title`, `target`, optional `description` and `relation`; see **References** |
 | `extension` | `name`, `version`, `data`, and a `fallback` a reader can print |
 
-**A type this document does not list is an invalid document, not an extension.** That is what makes
-`extension` worth having: a reader knows the whole vocabulary, and everything outside it arrives in
-a shape that says how to cope with not knowing it.
+A type absent from the current schema is invalid for that schema. Readers may encounter a newer
+standard type and show an unsupported-block notice. Custom content uses `extension` and its fallback.
 
 ## Rendering: what is required of a consumer
 
@@ -265,3 +271,53 @@ against a real working tree fills it in.
 
 `cw migrate --to cw/2` does the mechanical part and prints a numbered list of what it would have had
 to guess.
+
+
+## References
+
+`reference` is a standard cw/2 block, not an extension. It links to another complete walkthrough;
+it never imports blocks, alters reading order, or automatically loads a dependency.
+
+```json
+{
+  "type": "reference",
+  "title": "Authentication",
+  "description": "Follow token validation in more detail.",
+  "relation": "deep-dive",
+  "target": {
+    "file": "./authentication.json",
+    "url": "https://cw.roesink.dev/w/authentication",
+    "stepId": "validate-token"
+  }
+}
+```
+
+The URL above is illustrative. `title` is nonempty plain text. `description` is optional CommonMark.
+`relation` is optional: `related` (default), `deep-dive`, `prerequisite`, or `next`. An unknown relation
+renders as `related`. These labels describe intent; they do not enforce prerequisites or sequencing.
+As with other blocks, `id` and namespaced `ext` are optional.
+
+`target` requires at least one of `file` and `url`. If both are present, the author asserts they
+represent the same walkthrough; no revision pinning or identity check is implied. A local reader
+prefers a readable, valid file and otherwise uses the URL. A hosted reader uses the URL. A downloaded
+cache does not give a published document a local base directory.
+
+`file` is relative to the containing walkthrough's directory, not its code repository root or the
+process working directory. It follows the portable path rules, with an optional leading `./`.
+Parent, empty and interior dot segments are forbidden. Readers enforce directory containment after
+resolving symlinks. The file must contain walkthrough JSON; its extension is not significant.
+`url` is an absolute HTTP(S) reader URL; readers must not forward authentication to another origin.
+
+`stepId` identifies a step in the target document, never in the referring document's ID namespace.
+Omitting it opens the target overview. A missing step opens the overview with a notice. The web
+reader accepts `#step=<percent-encoded-id>` for this purpose; existing full step addresses still work.
+
+Navigation happens only after an explicit user action. Readers preserve the original position and
+completion state and provide a way back. A web reader may retain the current tab and open a published
+URL in a separate tab, so a locked or unavailable target cannot replace the current walkthrough.
+Unavailable files or URLs show an actionable error without invalidating the referring document.
+References may form cycles: readers must not recursively fetch, validate or expand their targets.
+Structural validation never requires network access or the target files to exist.
+
+Authors keep each walkthrough self-contained. References add useful context or further reading;
+they do not replace the explanation needed to understand the current scope.

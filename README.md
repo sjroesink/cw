@@ -7,6 +7,25 @@ the reader's own editor, and the whole content is one JSON file.
 
 The page holds no topic of its own. A new walkthrough is a file and nothing else.
 
+There is also a [VS Code extension](vscode-extension/README.md) for reading local
+`cw/2` files beside the actual source, with guided navigation, highlights and a
+sidebar for the explanation.
+
+## Repository overview
+
+[Read the high-level repository walkthrough](examples/repo-overview.json) (`cw/2`):
+three parts and eight steps covering the document contract, validation, web and VS Code
+readers, local comments, and authoring instructions. The diagram links to the relevant code.
+
+Open it with **CW: Open Walkthrough…** in VS Code, or run from this checkout:
+
+```sh
+go run . serve examples/repo-overview.json --root .
+```
+
+Check that its embedded snippets still match with
+`go run . check examples/repo-overview.json --root .`.
+
 ## Running it
 
 Go on PATH is the only requirement. The binary has no module dependencies.
@@ -92,7 +111,7 @@ where it hangs: the page, the file and the lines. The page says that somebody pi
 it is being written, and shows the answer when `cw comments reply` sends it back. When nothing is
 listening the page says that too, and offers the prompt to paste into an agent.
 
-An answer is markdown, or the same seven blocks a step is written in. Send a JSON array of blocks
+An answer is markdown, or the same eight blocks a step is written in. Send a JSON array of blocks
 instead of prose and the page draws them with the renderer it draws the walkthrough with: line
 numbers that open the editor, a mermaid diagram, a callout. They are held to the block definition
 in the schema and to nothing else, because a reply is not a published document and the rules
@@ -163,3 +182,16 @@ while you write.
 Mermaid, the highlighter and the two typefaces are fetched once through the server and cached on
 disk, so the page keeps working on a plane. Without them a diagram falls back to its own source and
 code renders unhighlighted, which is still the thing being described.
+
+
+### References between walkthroughs
+
+cw/2 now includes a standard `reference` block. [examples/references.json](examples/references.json)
+opens the repository tour at its overview or a specific step. Run `cw serve examples/references.json`
+or open it with **CW: Open Walkthrough** in VS Code 0.2.0 or later.
+
+Targets accept a `file` relative to the walkthrough directory, a published `url`, or both, plus
+an optional `stepId`. Local readers prefer the file. VS Code keeps a return stack; local web readers
+show **Back to previous walkthrough**. Published URLs open in another browser tab, retaining the
+original reading. See [the reference contract](spec/FORMAT.md#references) for all fields.
+Earlier strict cw/2 readers need an update to accept this eighth block type.

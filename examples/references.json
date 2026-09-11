@@ -1,0 +1,20 @@
+{
+  "$schema": "../schema/walkthrough.v2.schema.json",
+  "version": "cw/2",
+  "title": "Explore the cw repository",
+  "summary": "A small example of linking to another walkthrough. Open a reference, read its target, then return to this page.",
+  "parts": [{
+    "id": "explore", "title": "Choose a starting point", "summary": "Open the repository tour or jump to its document contract.",
+    "sections": [{
+      "id": "reading", "title": "Further reading",
+      "steps": [{
+        "id": "references", "title": "Repository and format",
+        "blocks": [
+          { "type": "markdown", "text": "cw stores explanations as portable JSON. Its Go CLI, web reader and VS Code extension consume the same document. These references open the included repository tour either at its overview or directly at the document contract." },
+          { "type": "reference", "title": "Repository overview", "description": "Explore the contract, readers and authoring workflow.", "target": { "file": "./repo-overview.json" } },
+          { "type": "reference", "title": "The walkthrough document", "relation": "deep-dive", "description": "Jump directly to the explanation of the document structure.", "target": { "file": "./repo-overview.json", "stepId": "document" } }
+        ]
+      }]
+    }]
+  }]
+}

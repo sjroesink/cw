@@ -70,7 +70,7 @@ cw.roesink.dev, and a write path for anonymous readers is not something `gate.go
 guard.
 
 Two things follow from those and are worth knowing before changing this. An answer may be written
-in the seven blocks a step is written in, and then it is drawn by `render2.js` rather than by a
+in the eight blocks a step is written in, and then it is drawn by `render2.js` rather than by a
 second renderer that would drift: `blockSchema` lifts `$defs/block` out of the v2 schema and holds
 a reply to that and nothing more, because the rules `inspect2` adds are about a document somebody
 publishes. And nothing removes a comment. Archiving takes it out of the column and out of what a
@@ -89,10 +89,10 @@ specified. Adding an optional field is free; removing one, renaming one or chang
 is not, and needs a new version string with both served. `spec/FORMAT.md` states that promise, so it
 is a promise.
 
-For `cw/2` the promise goes further: **no new block type.** The seven are the seven, and anything
-else is an `extension`, which carries the fallback that makes a reader who does not know it still
-able to read the walkthrough. `ext` is the other open place, for what one consumer needs and the
-format has no opinion about.
+Standard block types may be added within `cw/2`; `reference` is the eighth. This explicitly
+replaces the previous fixed-seven-types promise. Existing documents remain valid, but older
+strict readers need an update for new types. Update the schema, readers and field reference
+together. Custom content still uses `extension` and its fallback; `ext` holds consumer metadata.
 
 Which version a document is read as comes from `version` in the document and nothing else.
 `load.go` is that seam: it picks the schema, the struct and the checks, and the page picks its

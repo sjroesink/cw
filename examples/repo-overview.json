@@ -1,0 +1,389 @@
+{
+  "$schema": "https://cw.roesink.dev/schema/v2.json",
+  "version": "cw/2",
+  "title": "cw: a high-level repository tour",
+  "summary": "Follow a walkthrough from its JSON contract through validation, web delivery and VS Code navigation, then see how local questions and authoring instructions fit around it. This is an architectural orientation; deployment, authentication internals and worktree management are outside the route. Inspected working tree: 2026-09-11, based on c7c69d9677e9, including local VS Code additions. Commit links are recorded only for files identical to that revision.",
+  "language": "go",
+  "source": {
+    "kind": "subsystem",
+    "provider": "github",
+    "repositoryUrl": "https://github.com/sjroesink/cw",
+    "url": "https://github.com/sjroesink/cw",
+    "label": "Repository overview: working tree"
+  },
+  "parts": [
+    {
+      "id": "contract",
+      "title": "One document, a shared contract",
+      "summary": "The document contains the explanation; schema and semantic checks make it portable.",
+      "files": [
+        "doc2.go",
+        "load.go",
+        "schema/walkthrough.v2.schema.json",
+        "spec/FORMAT.md"
+      ],
+      "sections": [
+        {
+          "id": "contract-route",
+          "title": "One document, a shared contract",
+          "summary": "The document contains the explanation; schema and semantic checks make it portable.",
+          "steps": [
+            {
+              "id": "document",
+              "title": "The walkthrough is data",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "The main unit is a JSON document containing parts, sections and steps. Each cw/2 step holds an ordered list of blocks: prose, code, callouts, diagrams, diffs, timelines or an extension fallback. A new topic needs a document, not a new screen implementation."
+                },
+                {
+                  "type": "diagram",
+                  "id": "repository-map",
+                  "format": "mermaid",
+                  "text": "flowchart TB\n  A[Author or skill] --> D[cw/2 JSON]\n  D --> V[Schema checks]\n  V --> L[Local web]\n  V --> H[Hosted web]\n  V --> E[VS Code]\n  L --> C[Local comments]\n  E --> C",
+                  "alt": "An author writes cw/2 JSON. Validation checks the contract. Local web, hosted web and VS Code read it; the local readers also connect to local comments.",
+                  "caption": "The contract is shared. Go and the VS Code extension implement their own validation and rendering. Click a reader or the comments node to visit its code.",
+                  "links": [
+                    {
+                      "nodeId": "D",
+                      "blockId": "document-contract"
+                    },
+                    {
+                      "nodeId": "V",
+                      "blockId": "parse-contract"
+                    },
+                    {
+                      "nodeId": "L",
+                      "blockId": "local-server"
+                    },
+                    {
+                      "nodeId": "H",
+                      "blockId": "hosted-payload"
+                    },
+                    {
+                      "nodeId": "E",
+                      "blockId": "editor-navigation"
+                    },
+                    {
+                      "nodeId": "C",
+                      "blockId": "comments-storage"
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "id": "document-contract",
+                  "snippet": {
+                    "label": "The top-level document",
+                    "language": "go",
+                    "text": "type Doc2 struct {\n\tSchema   string                     `json:\"$schema,omitempty\"`\n\tVersion  string                     `json:\"version\"`\n\tTitle    string                     `json:\"title\"`\n\tSummary  string                     `json:\"summary,omitempty\"`\n\tLanguage string                     `json:\"language,omitempty\"`\n\tSource   *Source2                   `json:\"source,omitempty\"`\n\tParts    []Part2                    `json:\"parts\"`\n\tExt      map[string]json.RawMessage `json:\"ext,omitempty\"`\n}\n",
+                    "source": {
+                      "file": "doc2.go",
+                      "startLine": 40,
+                      "endLine": 49
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "bb919dd6e97527f29f80de3ab800e622bbec27e5c4a42b3be984960dd6b006d2"
+                    }
+                  }
+                },
+                {
+                  "type": "code",
+                  "id": "step-contract",
+                  "snippet": {
+                    "label": "Steps carry ordered blocks",
+                    "language": "go",
+                    "text": "type Step2 struct {\n\tID     string                     `json:\"id\"`\n\tTitle  string                     `json:\"title\"`\n\tSpeech string                     `json:\"speech,omitempty\"`\n\tBlocks []Block                    `json:\"blocks\"`\n\tExt    map[string]json.RawMessage `json:\"ext,omitempty\"`\n}\n",
+                    "source": {
+                      "file": "doc2.go",
+                      "startLine": 97,
+                      "endLine": 103
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "4457004573f4eaf41f8d511f55ab927d1b1f54ef69ba961cef32fd375a96e102"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "validation",
+              "title": "Validate before interpreting",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "ParseDoc in load.go is the Go entry point for document bytes. It chooses the schema from version, validates the shape, and then runs inspect2 for cw/2 rules such as snippet ranges and diagram references. The schema lives in schema/; spec/FORMAT.md explains its meaning. Unsupported versions are refused."
+                },
+                {
+                  "type": "code",
+                  "id": "parse-contract",
+                  "snippet": {
+                    "label": "Version selects the contract",
+                    "language": "go",
+                    "text": "\tversion, _ := obj[\"version\"].(string)\n\tsch := schemaFor(version)\n\tif sch == nil {\n\t\treturn nil, fmt.Errorf(\"%s says its version is %q, and this build reads %s and %s. A reader that does not know a version refuses the file rather than guessing which half of it it still understands\",\n\t\t\tname, version, FormatV1, FormatV2)\n\t}\n\tres.Errors = sch.Validate(generic)\n",
+                    "source": {
+                      "file": "load.go",
+                      "revision": "c7c69d9677e90cb87d1fec92636972a6fed8a6e7",
+                      "startLine": 61,
+                      "endLine": 67
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "2a89ca3bf8987e94697e654ccab910920fceb205f8009e45bfa94d000dbb7552"
+                    }
+                  }
+                },
+                {
+                  "type": "code",
+                  "id": "semantic-checks",
+                  "snippet": {
+                    "label": "Then check cw/2 meaning",
+                    "language": "go",
+                    "text": "\tcase FormatV2:\n\t\td := &Doc2{}\n\t\tif err := json.Unmarshal(lifted, d); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"%s does not match the schema: %w\", name, err)\n\t\t}\n\t\tres.Doc2 = d\n\t\tinspect2(res, d)\n\t\tres.checkSchemaURL(d.Schema, FormatV2)\n",
+                    "source": {
+                      "file": "load.go",
+                      "revision": "c7c69d9677e90cb87d1fec92636972a6fed8a6e7",
+                      "startLine": 83,
+                      "endLine": 90
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "1d96d59d11cb5712e4c3cbae69cd910b6dbd1cd069b4631b837d1e89bf973c53"
+                    }
+                  }
+                },
+                {
+                  "type": "callout",
+                  "severity": "info",
+                  "text": "The Go application also retains cw/1 support for older documents. The VS Code extension intentionally accepts cw/2 only."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "readers",
+      "title": "Read the same content in different places",
+      "summary": "The local server supplies machine access, the site distributes documents, and VS Code opens source directly.",
+      "files": [
+        "main.go",
+        "web/render2.js",
+        "api.go",
+        "vscode-extension/src/extension.ts"
+      ],
+      "sections": [
+        {
+          "id": "readers-route",
+          "title": "Read the same content in different places",
+          "summary": "The local server supplies machine access, the site distributes documents, and VS Code opens source directly.",
+          "steps": [
+            {
+              "id": "local-reader",
+              "title": "The local server joins document and checkout",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "cw serve loads the file and resolves the repository root. It creates a local server with the document, checkout and comment store. That root is a fact about this reading session; cw/2 does not embed a machine-specific checkout path. main.go wires the service; doc.go handles local snippet verification."
+                },
+                {
+                  "type": "code",
+                  "id": "local-server",
+                  "snippet": {
+                    "label": "A document plus local context",
+                    "language": "go",
+                    "text": "\troot := resolveRoot(f, res.View().RootHint)\n\n\tsub, err := fs.Sub(webFS, \"web\")\n\tif err != nil {\n\t\tdie(\"the web assets are missing from this build: %v\", err)\n\t}\n\tkey := commentKey(f.slug, abs)\n\ts := &server{file: abs, root: root, dev: f.dev, token: randomToken(),\n\t\tvendor: NewVendor(settings.Offline), web: sub,\n\t\tkey: key, title: res.View().Title, comments: openComments(key, res.View().Title)}\n",
+                    "source": {
+                      "file": "main.go",
+                      "startLine": 612,
+                      "endLine": 621
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "ec70559517a2cc14d420105b532abfa214262b585da511ec5f67ba68d76311b9"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "browser-reader",
+              "title": "The browser renders blocks in order",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "web/app.js owns the overview, navigation and reader shell; web/state.js owns reading state. The selected version renderer builds each step. For cw/2, web/render2.js walks the authored blocks in order, keeping explanation and evidence together. web/ui.js supplies shared rendering and editor-link helpers."
+                },
+                {
+                  "type": "code",
+                  "id": "browser-blocks",
+                  "snippet": {
+                    "label": "The cw/2 rendering loop",
+                    "language": "javascript",
+                    "text": "  step(step, host) {\n    for (const [i, b] of (step.blocks || []).entries()) {\n      const node = blockNode(b, i);\n      if (!node) continue;\n      // The spacing belongs to being a block rather than to being a diagram or a\n      // diff, so it is set here and the builders only say what they are.\n      node.classList.add(\"block\");\n      if (b.id) node.dataset.block = b.id;\n",
+                    "source": {
+                      "file": "web/render2.js",
+                      "startLine": 44,
+                      "endLine": 51
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "1bfcf12acdf81dde71356ade0b16753d813aae84a6aeb8eb2cf1ffb5854d5034"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "hosted-reader",
+              "title": "Publishing separates content from a local machine",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "The hosted API retrieves a stored document and packages it for the browser. Its payload contains the JSON, publication metadata and source links. store.go persists hosted data; gate.go controls read access. The hosted page links to repository code; checkout verification and local questions belong to the local readers."
+                },
+                {
+                  "type": "code",
+                  "id": "hosted-payload",
+                  "snippet": {
+                    "label": "The hosted reader payload",
+                    "language": "go",
+                    "text": "\tview := res.View()\n\treturn &payload{\n\t\tDoc: d, Hosted: true, Meta: m, GitHub: BuildGitHubLinks(view.Source),\n\t\tSettings: defaultSettings(),\n\t\tStamp:    stamp,\n\t}, nil\n",
+                    "source": {
+                      "file": "api.go",
+                      "revision": "c7c69d9677e90cb87d1fec92636972a6fed8a6e7",
+                      "startLine": 409,
+                      "endLine": 414
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "ecd3b01de2e5cb60c336c7237f57146516f5aecf4d2b5d63108864958b9ab689"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "editor-reader",
+              "title": "VS Code keeps explanation beside real code",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "vscode-extension/ is a separate TypeScript reader. model.ts validates the shared cw/2 schema and resolves copied snippets; render.ts and sidebar.ts build the explanation. extension.ts opens the matching file, decorates it and selects the relevant line. remote.ts downloads published documents. This excerpt starts after snippet resolution has established a usable range."
+                },
+                {
+                  "type": "code",
+                  "id": "editor-navigation",
+                  "snippet": {
+                    "label": "Open and reveal the verified source location",
+                    "language": "typescript",
+                    "text": "      const start = result.startLine! - 1, end = result.endLine! - 1;\n      const editor = reveal ? await vscode.window.showTextDocument(document, { preview: true, preserveFocus: true, viewColumn: vscode.ViewColumn.One })\n        : vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === document.uri.toString());\n      if (!editor) return;\n      this.decorate(editor, block, start, end);\n      if (reveal) {\n        const first = relativeLine ?? block.snippet.highlights?.[0]?.lines.start ?? 1;\n        editor.selection = new vscode.Selection(start + first - 1, 0, start + first - 1, 0);\n        editor.revealRange(new vscode.Range(start, 0, end, document.lineAt(end).text.length), vscode.TextEditorRevealType.InCenterIfOutsideViewport);\n",
+                    "source": {
+                      "file": "vscode-extension/src/extension.ts",
+                      "startLine": 721,
+                      "endLine": 729
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "237df00e9a60bfcc765d78002d3c6730be17ae095ec7a56f3f7ed3d14464a650"
+                    }
+                  }
+                },
+                {
+                  "type": "callout",
+                  "severity": "info",
+                  "text": "This extension is part of the inspected working tree and is not present in the recorded base commit. Its snippet intentionally has no commit permalink."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "around-the-document",
+      "title": "Feedback and authoring stay around the document",
+      "summary": "Local questions do not change the walkthrough; shared instructions help authors create it.",
+      "files": [
+        "comments.go",
+        "docs.go",
+        "skills/code-walkthrough/SKILL.md"
+      ],
+      "sections": [
+        {
+          "id": "around-the-document-route",
+          "title": "Feedback and authoring stay around the document",
+          "summary": "Local questions do not change the walkthrough; shared instructions help authors create it.",
+          "steps": [
+            {
+              "id": "local-feedback",
+              "title": "Questions belong to a reading session",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "comments.go owns local threads and the cw comments watch/reply workflow. Comment files live beside user settings, not beside the walkthrough. The local server is their only writer. The web reader uses that service directly; VS Code connects through vscode-extension/src/comments.ts and can start its bundled cw helper."
+                },
+                {
+                  "type": "code",
+                  "id": "comments-storage",
+                  "snippet": {
+                    "label": "Comments have their own storage location",
+                    "language": "go",
+                    "text": "var commentsDir = func() (string, error) {\n\tp, err := settingsPath()\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn filepath.Join(filepath.Dir(p), \"comments\"), nil\n",
+                    "source": {
+                      "file": "comments.go",
+                      "startLine": 199,
+                      "endLine": 204
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "7423df614749a8a628faeb0954ba2c1b58a2399ca1436956f590d1ed4770963a"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "authoring",
+              "title": "The same guidance reaches local authors and the site",
+              "blocks": [
+                {
+                  "type": "markdown",
+                  "text": "skills/code-walkthrough/ explains scope, evidence and cw/2 fields. docs.go embeds the shared rules and field reference and assembles them with the API instructions for /skill.md. Authoring guidance stays close to the format rather than inside a reader. examples/ provides documents to try, including this one."
+                },
+                {
+                  "type": "code",
+                  "id": "author-instructions",
+                  "snippet": {
+                    "label": "Assemble the agent-facing instructions",
+                    "language": "go",
+                    "text": "func SkillDoc(base string) string {\n\tparts := []string{\n\t\tfill(agentIntroMD, base),\n\t\trulesMD,\n\t\tdataMD,\n\t\tfill(agentAPIMD, base),\n\t}\n\treturn strings.Join(parts, \"\\n\\n---\\n\\n\")\n",
+                    "source": {
+                      "file": "docs.go",
+                      "revision": "c7c69d9677e90cb87d1fec92636972a6fed8a6e7",
+                      "startLine": 41,
+                      "endLine": 48
+                    },
+                    "hash": {
+                      "algorithm": "sha256",
+                      "value": "79c31e0ac9ae6e97e1bec170584f419f872d4887373003caa548ee48fd763c27"
+                    }
+                  }
+                },
+                {
+                  "type": "callout",
+                  "severity": "tip",
+                  "title": "Where to start a change",
+                  "text": "For document meaning, start in schema/ and spec/. For browser behavior, start in web/. For native editor behavior, start in vscode-extension/src/. For local feedback, start in comments.go. Validate an edited walkthrough with cw check before trying it in a reader."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

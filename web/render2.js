@@ -1,14 +1,14 @@
 /* The cw/2 step: a list of blocks in the order the author wrote them, as many
    as it takes and in any mix.
 
-   Seven kinds, and an eighth is not an extension but an invalid document. The
+   Standard kinds include references to other walkthroughs. The
    one called `extension` is the door out, and it carries the sentence a reader
    who has never heard of it should print instead. This reader has never heard
    of any of them, so that is what it does. */
 
 import {
   HOSTED, el, mdEl, mdInline, mdBlock, baseName, drawMermaid, openDiagram, highlightInto,
-  langFor, fileName, openButton, openAt, every,
+  langFor, fileName, openButton, openAt, every, api, toast,
 } from "./ui.js";
 import { state, doc, parts, setUI, setSticky, go, openStep } from "./state.js";
 
@@ -92,6 +92,7 @@ function blockNode(b, i) {
     case "diff": return diffBlock(b);
     case "timeline": return timelineBlock(b, i);
     case "extension": return extensionBlock(b);
+    case "reference": return referenceBlock(b);
   }
   // The schema refuses an unknown kind, so this is a document that got here
   // some other way. Say so rather than drawing nothing.
@@ -104,6 +105,41 @@ function blockNode(b, i) {
    marked by finding the words again. The rest keeps the comment without
    drawing on it: a mermaid drawing and a diff have no words of their own to
    put a mark around. */
+function referenceBlock(b) {
+  const box = el('aside', 'reference');
+  box.appendChild(el('small', null, ['related', 'deep-dive', 'prerequisite', 'next'].includes(b.relation) ? b.relation : 'related'));
+  box.appendChild(el('h3', null, b.title));
+  if (b.description) box.appendChild(mdBlock(b.description));
+  const button = el('button', 'nav', 'Open walkthrough →');
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      let destination;
+      let local = false;
+      if (!HOSTED && b.target.file) {
+        try { destination = new URL((await api('/api/reference', { method: 'POST', body: JSON.stringify({ file: b.target.file }) })).url, location.href); local = true; }
+        catch (error) { if (!b.target.url) throw error; }
+      }
+      if (!destination && b.target.url) destination = new URL(b.target.url);
+      if (!destination) throw new Error('This reference needs its local JSON file. No published URL is provided.');
+      if (!/^https?:$/.test(destination.protocol) || destination.username || destination.password) throw new Error('Invalid walkthrough URL.');
+      destination.hash = b.target.stepId ? 'step=' + encodeURIComponent(b.target.stepId) : '';
+      // Keep the original available even if a hosted target is offline or locked.
+      // Same-origin readers can also offer a direct return button.
+      if (local && destination.origin === location.origin) {
+        try { sessionStorage.setItem('cw:return:' + destination.pathname, location.href); } catch {}
+        location.assign(destination.href);
+      } else {
+        const link = document.createElement('a');
+        link.href = destination.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.click();
+      }
+    } catch (error) { toast(error.message || String(error), true); }
+    finally { button.disabled = false; }
+  };
+  box.appendChild(button);
+  return box;
+}
+
 function anchorKind(type) {
   if (type === "code") return "code";
   if (type === "markdown" || type === "callout" || type === "extension") return "text";

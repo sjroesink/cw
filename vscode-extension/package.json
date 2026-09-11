@@ -1,0 +1,285 @@
+{
+  "name": "cw-walkthrough",
+  "displayName": "Code Walkthrough",
+  "description": "Read cw/2 walkthroughs beside your code, with guided navigation and highlights.",
+  "version": "0.2.0",
+  "publisher": "sjroesink",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sjroesink/cw.git",
+    "directory": "vscode-extension"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other",
+    "Education"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Reads local walkthroughs and source files. Does not execute walkthrough content or change your checkout."
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "cw.openPublished",
+        "title": "Open Published Walkthrough\u2026",
+        "category": "CW"
+      },
+      {
+        "command": "cw.refreshPublished",
+        "title": "Refresh Published Walkthrough",
+        "category": "CW"
+      },
+      {
+        "command": "cw.overview",
+        "title": "Walkthrough Overview",
+        "category": "CW"
+      },
+      {
+        "command": "cw.open",
+        "title": "Open Walkthrough\u2026",
+        "category": "CW",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "cw.next",
+        "title": "Next Step",
+        "category": "CW",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "cw.previous",
+        "title": "Previous Step",
+        "category": "CW",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "cw.nextCode",
+        "title": "Next Code Location",
+        "category": "CW"
+      },
+      {
+        "command": "cw.previousCode",
+        "title": "Previous Code Location",
+        "category": "CW"
+      },
+      {
+        "command": "cw.resume",
+        "title": "Resume Walkthrough",
+        "category": "CW"
+      },
+      {
+        "command": "cw.chooseRoot",
+        "title": "Choose Repository Folder\u2026",
+        "category": "CW"
+      },
+      {
+        "command": "cw.restart",
+        "title": "Restart Walkthrough",
+        "category": "CW"
+      },
+      {
+        "command": "cw.close",
+        "title": "Close Walkthrough",
+        "category": "CW",
+        "icon": "$(close)"
+      },
+      {
+        "command": "cw.settings",
+        "title": "Reading Settings",
+        "category": "CW"
+      },
+      {
+        "command": "cw.copyLink",
+        "title": "Copy Page Link",
+        "category": "CW"
+      },
+      {
+        "command": "cw.toggleTheme",
+        "title": "Toggle Reader Theme",
+        "category": "CW"
+      },
+      {
+        "command": "cw.comments",
+        "title": "Show or Hide Comments",
+        "category": "CW"
+      },
+      {
+        "command": "cw.commentSelection",
+        "title": "Comment on Editor Selection",
+        "category": "CW"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cw",
+          "title": "Code Walkthrough",
+          "icon": "media/walkthrough.svg"
+        }
+      ]
+    },
+    "views": {
+      "cw": [
+        {
+          "id": "cw.outline",
+          "name": "Contents"
+        },
+        {
+          "id": "cw.content",
+          "name": "Walkthrough",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "cw.outline",
+        "contents": "Read an explanation beside the code it describes.\n[Open a walkthrough](command:cw.open)\nSupports local cw/2 JSON files.",
+        "when": "!cw.loaded"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "cw.open",
+          "when": "view == cw.outline",
+          "group": "navigation"
+        },
+        {
+          "command": "cw.previous",
+          "when": "view == cw.content && cw.loaded",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cw.next",
+          "when": "view == cw.content && cw.loaded",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cw.chooseRoot",
+          "when": "view == cw.content && cw.loaded"
+        },
+        {
+          "command": "cw.restart",
+          "when": "view == cw.content && cw.loaded"
+        },
+        {
+          "command": "cw.close",
+          "when": "view == cw.outline && cw.loaded"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "cw.open",
+          "when": "resourceExtname == .json",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "cw.open",
+          "when": "resourceExtname == .json",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "cw.next",
+        "key": "alt+shift+pagedown",
+        "when": "cw.loaded"
+      },
+      {
+        "command": "cw.previous",
+        "key": "alt+shift+pageup",
+        "when": "cw.loaded"
+      }
+    ],
+    "configuration": {
+      "title": "Code Walkthrough",
+      "properties": {
+        "cw.site": {
+          "type": "string",
+          "default": "https://cw.roesink.dev",
+          "description": "Site used when opening a published walkthrough by name."
+        },
+        "cw.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "default": "auto",
+          "description": "Reader appearance. Auto follows the VS Code theme, including high contrast."
+        },
+        "cw.accent": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "blue",
+            "red",
+            "teal",
+            "purple"
+          ],
+          "default": "auto",
+          "description": "Reader focus and progress accent. Auto follows VS Code."
+        }
+      }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "*.walkthrough.json",
+          "/.cw/**/*.json",
+          "/walkthroughs/**/*.json"
+        ],
+        "url": "./dist/walkthrough.v2.schema.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test dist/core.test.js",
+    "test:integration": "npm run build && node test/run.mjs",
+    "test:browser": "npm run build && playwright test",
+    "vscode:prepublish": "npm run check && npm run build",
+    "package": "node package.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "dompurify": "^3.4.15",
+    "highlight.js": "^11.12.0",
+    "markdown-it": "^14.1.0",
+    "mermaid": "^11.17.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.96.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

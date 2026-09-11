@@ -1,6 +1,6 @@
 ---
 name: code-walkthrough
-description: "Turn a pull request or a subsystem into a page someone can work through at their own pace: parts on an overview, sections inside a part, and steps that carry the prose next to a mermaid diagram, the code, a diff or a small animation. Progress is remembered, every snippet links back to the line it came from, and the whole content is one JSON file written against a schema. Publish it and hand over the link. Use for 'maak een code walkthrough van deze PR', 'leg dit PR uit voor het team', 'walk me through this change', '/code-walkthrough X'."
+description: "Create a self-contained cw/2 walkthrough of one pull request or a specific part of a codebase, with a clear scope, verified code locations, and guided explanations for web and VS Code readers. Use for requests such as 'maak een code walkthrough van deze PR', 'walk me through this subsystem', or '/code-walkthrough X'."
 ---
 
 # code-walkthrough
@@ -10,87 +10,71 @@ is made of, and inside each part the sections and steps that explain it, with th
 diagram, a diff or an animation next to the prose.
 
 **Your job is one file.** The rest exists: a format called `cw/2`, a reader that runs on
-your machine and one that runs as a site, and an API to publish to. None of them knows any
+your machine, a VS Code extension and a site, and an API to publish to. None of them knows any
 topic. Adding a walkthrough is writing a document and nothing else.
 
-Read these in this order, and do not write anything before the first one:
-
-| | |
-|---|---|
-| `RULES.md` | what makes a walkthrough worth someone's afternoon. Read it first, every time |
-| `DATA.md` | every field, and what good content looks like in it |
-| `FORMAT.md` | only if you are building something else that reads walkthroughs |
-
-The design came from a Claude Design project and is reproduced as it was drawn: Sora and
-JetBrains Mono, the oklch palette, the three views, the progress bar. Change the data, not
-the page.
-
-## When it fits
-
-A pull request several people will read. Onboarding material for a subsystem. Anything
-where a diff belongs in the story, or where the reader will come back to it tomorrow
-rather than finish it in one sitting.
-
-It does not fit a change small enough to explain in a review comment, and it does not fit
-a question. Both of those are answered faster by answering them.
+Read [RULES.md](RULES.md) for scope and evidence, then [DATA.md](DATA.md) for the cw/2
+fields. Change the document, not the reader. For an ordinary code question, answer directly;
+when a walkthrough is requested, even a small topic can have a short walkthrough.
 
 ## Steps
 
-1. **Scope it.** Name the change in one line. Then name the parts, before writing any of
-   them: three to five, each one thing a reviewer could agree or disagree with on its own.
-   For a pull request the bug it fixes, the arrangement before it and the arrangement
-   after it are usually three of them.
+1. **Choose the boundary.** Identify the requested PR or path, symbol or behavior. Apply
+   the PR or component mode in `RULES.md`. Put the question answered, entry point, result
+   and relevant exclusions in `summary`, so the scope is clear without this conversation.
+   Keep one requested PR together even if it contains several concerns. Ask for a missing
+   target only when it cannot be inferred.
 
-2. **Read the change.** `gh pr diff <n>` and `gh pr view <n> --json files` for a pull
-   request. For a subsystem, invoke `how`, or trace it with `Grep` and `Read`. Write down
-   per hop: the file, the symbol, what it decides, what it hands on. Open the files
-   themselves; a walkthrough written off a diff summary reads like one.
+2. **Read evidence at a known revision.** Inspect PR metadata, changed files and diff, then
+   the actual head files and relevant base files. For a component, trace the requested flow
+   from entry to result. Record each hop's file, symbol, decision and next hop. Follow
+   dependencies only far enough to explain their contract in this flow. Record repository
+   and commit metadata from the same snapshot; describe any relevant uncommitted changes.
 
-3. **Lay out parts, sections and steps.** A part holds two to four sections; a section
-   holds two to five steps. If a section has one step, it is a step. If it has nine, it is
-   two sections.
+3. **Lay out the explanation.** Order parts and steps by behavior, with a reason for each
+   transition to another location. Use the required parts/sections/steps structure without
+   quotas. One part with one section and one step is valid. Do not pad a small PR with a
+   repository tour.
 
-4. **Write the file.** Point `$schema` at `https://cw.roesink.dev/schema/v2.json` so your
-   editor validates while you type, and set `version` to `cw/2`. Fill in `source` with the
-   repository URL and the pull request URL: `cw publish` reads the revision and the changed
-   files out of them, and those are what make every snippet link back to the diff.
+4. **Write one portable file.** Set `$schema` to `https://cw.roesink.dev/schema/v2.json`
+   and `version` to `cw/2`. Fill `source` with repository URL and revision, plus PR URL,
+   comparison revisions and changed files when applicable. This must be useful before
+   publishing. Embed the prose, verbatim snippets and diagrams; source paths are relative
+   to the repository, never to a machine's checkout. Label examples and omit their source.
+   Use ordered blocks for separate locations. Preserve stable IDs when editing. Ranges in
+   `highlights` and `annotations` are snippet-relative. Optional `endLine` and `hash` can be
+   filled by `cw migrate`; do not invent them or rely on publishing to identify the snapshot.
 
-   A step is a list of `blocks` in the order they are read, so prose, a snippet, a sentence
-   about it and a second snippet is a step you can now write. Give every part, section and
-   step an `id` that will not change; leave `endLine` and `hash` out, they are filled in for
-   you. Line numbers inside a snippet count from the snippet, not from the file.
-
-5. **Check it until it is clean.**
-   ```powershell
-   & "$env:USERPROFILE\.claude\skills\code-walkthrough\cw.ps1" check walkthrough.json --root C:\Projects\Fincent
+5. **Check scope and evidence.** Run:
+   ```text
+   cw check walkthrough.json --root <checkout-for-the-recorded-revision>
    ```
-   Errors are the walkthrough being wrong, not the tool. `STALE` means a snippet is not in
-   the tree the way you pasted it, which on a pull request usually means you are on the
-   wrong branch: `gh pr checkout <n>` first. Warnings do not block anything and are still
-   worth fixing: they are most of the difference between a walkthrough that validates and
-   one somebody wants to read.
+   Investigate stale snippets: the cause may be the wrong snapshot, changed code or an
+   incorrect excerpt. Use a matching checkout or isolated worktree, preserving the user's
+   active checkout. Apply the final isolation checks in `RULES.md`. Report unresolved
+   warnings and any verification that could not be run.
 
-6. **Look at it.**
-   ```powershell
-   & "$env:USERPROFILE\.claude\skills\code-walkthrough\cw.ps1" serve walkthrough.json --root C:\Projects\Fincent
+6. **Read the result.** Open the JSON in the VS Code reader, or run:
+   ```text
+   cw serve walkthrough.json --root <checkout-for-the-recorded-revision>
    ```
-   It opens a browser on 127.0.0.1. If Playwright is available, step through two or three
-   steps and screenshot them: the console clean, every mermaid diagram rendered, no step
-   scrolling past two screens.
+   Check entry, representative transitions and conclusion, including code navigation and
+   diagram links. Render each diagram when tooling is available. State any reader checks
+   that could not be performed.
 
-7. **Publish it**, unless it is only for you.
-   ```powershell
-   & "$env:USERPROFILE\.claude\skills\code-walkthrough\cw.ps1" publish walkthrough.json --root C:\Projects\Fincent
+7. **Deliver the file.** Publish when sharing or publishing is part of the request or
+   existing authorization; otherwise hand over the local JSON for either reader.
+   ```text
+   cw publish walkthrough.json --root <checkout-for-the-recorded-revision>
    ```
-   It verifies against the tree once more, fills in the ids and the snippet anchors, and
-   prints the URL. Publishing the same file again updates that same URL, so the link you
-   sent round keeps working. `--new` is how you deliberately make a second one.
+   Publishing verifies against the tree again and fills snippet anchors. Publishing the
+   same file updates its URL; `--new` deliberately creates a second walkthrough.
 
 ## Running it
 
-`cw.ps1` builds the binary from a checkout when there is one and installs the published
-module otherwise, then runs it. `cw.sh` does the same outside PowerShell. Go on PATH is
-the only requirement; the binary has no dependencies of its own.
+Use `cw` on PATH, or an installed `cw.ps1` / `cw.sh` wrapper if available. Locate it in
+this environment rather than assuming a particular user's skill or repository path.
+From a checkout of cw, `go run .` can replace `cw`; Go is then required.
 
 ```
 cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
@@ -187,5 +171,7 @@ renders unhighlighted, which is still the thing being described.
 
 ## Reply
 
-The URL, one line per part on what it covers, and which files the walkthrough touches. Say
-what you could not verify, and name any snippet `cw check` reported as moved or gone.
+Link the JSON and, if published, the URL. State the scope and recorded revision, what the
+parts cover, and relevant exclusions. Distinguish source inspection, snippet verification,
+executed tests and reader checks. Say what could not be verified, including snippets
+reported as moved or gone. Never include credentials.

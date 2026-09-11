@@ -5,8 +5,7 @@ code and no diagrams. The contract is `walkthrough.v2.schema.json`, published at
 `https://cw.roesink.dev/schema/v2.json`. Point at it from the file and your editor will validate
 while you type.
 
-This is the field reference. `RULES.md` is what makes a walkthrough worth reading; `FORMAT.md` is
-for writing a second reader rather than a walkthrough.
+This is the field reference. `RULES.md` explains scope, evidence and writing quality.
 
 ```jsonc
 {
@@ -53,9 +52,11 @@ that stays right after the branch moves on. Without either, a snippet has nowher
 `status` is one of `added`, `modified`, `deleted`, `renamed`, `copied`, `type-changed` or `other`,
 and a rename or a copy also names `previousFile`.
 
-`cw publish` fills in `revision`, `comparison`, `state` and `changedFiles` from git and `gh`, so
-writing `kind`, `provider`, `repositoryUrl`, `label` and `url` by hand is enough. Publishing straight
-at the API fills in nothing: write them yourself, or the page loses its links.
+Record this metadata from the snapshot inspected, even for a local file. `cw publish`
+can enrich it from git and `gh`; the API fills in nothing. Do not rely on a later publish
+to identify the code being explained. For a component use `kind: "subsystem"`, its repository
+and revision, omitting PR-only metadata. Describe entry, result and relevant exclusions in
+`summary`, not a custom schema field.
 
 ## Parts, sections, steps
 
@@ -81,8 +82,9 @@ Three levels, and each one is a screen the reader lands on.
 ]
 ```
 
-Three to five parts, two to four sections each, two to five steps each. The overview is a set of
-cards to choose from: past six parts it becomes a list to scroll, and the validator says so.
+Use as many parts, sections and steps as the topic needs. Each container needs at least
+one child; one part with one section and one step is valid. Size warnings are readability
+guidance, not a reason to pad a small topic or split a cohesive PR.
 
 **`id` is required, and unique across the whole document.** Not per level, the way `cw/1` had it:
 a diagram links to a block by name, and nothing in a name says what kind of thing it points at. It
@@ -113,7 +115,7 @@ means nothing to somebody being read to. A reader with no screen falls back to t
 
 **`id` on a block** is only needed when something points at it, which today means a diagram link.
 
-Seven types, and an eighth is not an extension but an invalid document. `extension` is where
+Eight standard types, including `reference` for another walkthrough. `extension` is where
 anything the format has no opinion about goes.
 
 ## `markdown`, the prose
@@ -332,3 +334,16 @@ blocks: a question about a function is answered best by that function, at its ow
 None of that touches the document. A walkthrough with fifty comments on it publishes as the same
 bytes as one with none: the comments are about a reading, and the file is about the change. Nothing
 in this reference is where they go, and there is no field to add for them.
+
+
+### reference
+
+Link to another self-contained walkthrough using `type: "reference"`, a plain-text `title`, and
+`target` containing a relative `file`, an absolute HTTP(S) `url`, or both. Optional `description`
+is Markdown. Optional `relation` is `related` (default), `deep-dive`, `prerequisite`, or `next`.
+Optional `target.stepId` selects a step in that other document; omit it for its overview.
+Resolve files relative to this JSON file's directory, with optional `./`; never use `..` or
+absolute machine paths. A URL provides the hosted alternative when a local file is unavailable.
+Use only verified existing targets; do not invent published URLs. References add context and do
+not replace this walkthrough's own entry point, explanation or result. Older cw/2 readers require
+an upgrade for this block type. See `spec/FORMAT.md` for the reader contract.

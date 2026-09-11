@@ -114,7 +114,7 @@ func inspect2(res *LoadResult, d *Doc2) {
 func onlyProse(st *Step2) bool {
 	for _, b := range st.Blocks {
 		switch b.Type {
-		case BlockCode, BlockDiagram, BlockDiff, BlockTimeline, BlockExtension:
+		case BlockCode, BlockDiagram, BlockDiff, BlockTimeline, BlockExtension, BlockReference:
 			return false
 		}
 	}
@@ -123,6 +123,10 @@ func onlyProse(st *Step2) bool {
 
 func checkBlock(errf, warnf func(string, ...any), b *Block, at string) {
 	switch b.Type {
+	case BlockReference:
+		if b.Target != nil && b.Target.File != "" && !portablePath(strings.TrimPrefix(b.Target.File, "./")) {
+			errf("%s.target.file must stay inside the walkthrough directory", at)
+		}
 	case BlockCode:
 		checkSnippet(errf, warnf, b.Snippet, at+".snippet")
 	case BlockDiff:

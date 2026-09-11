@@ -25,8 +25,7 @@ rather than a picture that has to be lined up with the previous one by eye. And
 does not know it still readable.
 */
 
-// The seven kinds of block. An eighth is not an extension, it is an invalid
-// document: `extension` is where anything the format has no opinion about goes.
+// The standard block kinds. Custom content uses extension.
 const (
 	BlockMarkdown  = "markdown"
 	BlockCode      = "code"
@@ -35,6 +34,7 @@ const (
 	BlockDiff      = "diff"
 	BlockTimeline  = "timeline"
 	BlockExtension = "extension"
+	BlockReference = "reference"
 )
 
 type Doc2 struct {
@@ -149,7 +149,18 @@ type Block struct {
 	Data     json.RawMessage `json:"data,omitempty"`
 	Fallback string          `json:"fallback,omitempty"`
 
+	// reference
+	Description string           `json:"description,omitempty"`
+	Relation    string           `json:"relation,omitempty"`
+	Target      *ReferenceTarget `json:"target,omitempty"`
+
 	Ext map[string]json.RawMessage `json:"ext,omitempty"`
+}
+
+type ReferenceTarget struct {
+	File   string `json:"file,omitempty"`
+	URL    string `json:"url,omitempty"`
+	StepID string `json:"stepId,omitempty"`
 }
 
 type Snippet struct {
@@ -333,6 +344,15 @@ func (b Block) MarshalJSON() ([]byte, error) {
 			Frames  []TimelineFrame `json:"frames"`
 			extTail
 		}{head, b.Caption, b.Nodes, b.Frames, tail})
+	case BlockReference:
+		return marshalPlain(struct {
+			blockHead
+			Title       string           `json:"title"`
+			Description string           `json:"description,omitempty"`
+			Relation    string           `json:"relation,omitempty"`
+			Target      *ReferenceTarget `json:"target"`
+			extTail
+		}{head, b.Title, b.Description, b.Relation, b.Target, tail})
 	case BlockExtension:
 		return marshalPlain(struct {
 			blockHead

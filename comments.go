@@ -390,13 +390,14 @@ watch again. Keep going until I say to stop.`, name, key)
 // servedRun is one running cw serve, and enough about it for the command to
 // reach it from another process.
 type servedRun struct {
-	PID   int       `json:"pid"`
-	Port  int       `json:"port"`
-	Token string    `json:"token"`
-	Key   string    `json:"key"`
-	Title string    `json:"title"`
-	File  string    `json:"file"`
-	At    time.Time `json:"at"`
+	BasePath string    `json:"basePath,omitempty"`
+	PID      int       `json:"pid"`
+	Port     int       `json:"port"`
+	Token    string    `json:"token"`
+	Key      string    `json:"key"`
+	Title    string    `json:"title"`
+	File     string    `json:"file"`
+	At       time.Time `json:"at"`
 }
 
 // servingStore sits beside worktrees.json for the same reason: it is a record
@@ -451,7 +452,7 @@ func rememberRun(r servedRun) {
 	defer servingMu.Unlock()
 	kept := []servedRun{}
 	for _, old := range readRuns() {
-		if old.PID != r.PID {
+		if old.PID != r.PID || old.BasePath != r.BasePath {
 			kept = append(kept, old)
 		}
 	}
@@ -490,7 +491,7 @@ func liveRuns() []servedRun {
 		kept := []servedRun{}
 		for _, r := range readRuns() {
 			for _, ok := range live {
-				if ok.PID == r.PID {
+				if ok.PID == r.PID && ok.BasePath == r.BasePath {
 					kept = append(kept, r)
 					break
 				}
@@ -511,7 +512,7 @@ func callRun(r servedRun, method, path string, body any, timeout time.Duration) 
 		}
 		rdr = bytes.NewReader(raw)
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", r.Port, path)
+	url := fmt.Sprintf("http://127.0.0.1:%d%s%s", r.Port, r.BasePath, path)
 	req, err := http.NewRequest(method, url, rdr)
 	if err != nil {
 		return nil, err

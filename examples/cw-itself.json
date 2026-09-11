@@ -53,7 +53,7 @@
                 "refs": {
                   "schema": {
                     "file": "schema.go",
-                    "from": 233,
+                    "from": 236,
                     "note": "The same schema an editor validates against is enforced here, so the two cannot drift apart.",
                     "code": "func (v *validator) walk(at string, value any, sch map[string]any) {\n\tsch = v.resolve(sch)\n\tif len(sch) == 0 {\n\t\treturn\n\t}\n\n\tif want, ok := sch[\"type\"].(string); ok && !typeMatches(want, value) {\n\t\tv.fail(at, \"should be %s, not %s\", want, kindOf(value))\n\t\treturn\n\t}"
                   }
@@ -129,11 +129,11 @@
               "body": "A server on localhost can be reached by any site you have open. So the origin has to be this loopback server, and the caller has to know the token that was stamped into the page when it was served. Only then does anything get read.",
               "code": {
                 "file": "main.go",
-                "from": 808,
+                "from": 818,
                 "text": "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tif o := r.Header.Get(\"Origin\"); o != \"\" && !strings.HasPrefix(o, \"http://127.0.0.1:\") && !strings.HasPrefix(o, \"http://localhost:\") {\n\t\t\thttp.Error(w, \"cross-origin requests are not served\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tif r.Header.Get(\"X-Cw-Token\") != s.token {\n\t\t\thttp.Error(w, \"missing or stale token, reload the page\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}",
                 "hi": [
-                  810,
-                  814
+                  820,
+                  824
                 ]
               }
             },
@@ -267,12 +267,12 @@
               "body": "The server works the link out once and hands the page a base URL and a map of anchors. So the page does no hashing, makes no request, and the same function in the same file serves both the local button and the hosted one.",
               "code": {
                 "file": "web/ui.js",
-                "from": 745,
+                "from": 747,
                 "text": "export function openButton(file, line, cls, to) {\n  if (!HOSTED) {\n    const b = el(\"button\", cls, \"open in IDE \u2197\");\n    b.type = \"button\";\n    b.title = \"open \" + file + \" at line \" + line + \" in \" + whereOpens();\n    b.addEventListener(\"click\", () => openAt(file, line));\n    return b;\n  }\n  const href = githubHref(file, line, to);\n  if (!href) {\n    const b = el(\"button\", cls, \"no link \u2197\");\n    b.type = \"button\";\n    b.title = \"this walkthrough names no repository, so there is nothing to link to\";\n    b.addEventListener(\"click\", () => toast(\"This walkthrough names no repository to link to\", true));\n    return b;\n  }\n  const a = toCode(el(\"a\", cls + \" open-link\", \"on GitHub \u2197\"), href);\n  a.title = file + \" at line \" + line;\n  return a;\n}",
                 "lang": "javascript",
                 "hi": [
-                  746,
-                  761
+                  748,
+                  763
                 ]
               }
             }

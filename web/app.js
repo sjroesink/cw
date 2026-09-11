@@ -145,6 +145,7 @@ function render() {
   renderRail();
   const stage = $("stage");
   stage.textContent = "";
+  appendReferenceReturn(stage);
   if (state.view === "overview") stage.appendChild(viewOverview());
   else if (state.view === "part") stage.appendChild(viewPart());
   else stage.appendChild(viewStep());
@@ -556,6 +557,18 @@ async function load() {
   problems();
   render();
   return true;
+}
+
+function appendReferenceReturn(host) {
+  try {
+    const previous = sessionStorage.getItem('cw:return:' + location.pathname);
+    if (previous && new URL(previous).origin === location.origin && new URL(previous).pathname !== location.pathname) {
+      const back = el('button', null, '← Back to previous walkthrough');
+      back.onclick = () => location.assign(previous);
+      back.className = 'nav reference-return';
+      host.appendChild(back);
+    }
+  } catch { /* storage may be unavailable */ }
 }
 
 function wire() {

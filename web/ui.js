@@ -15,13 +15,15 @@ export const $ = (id) => document.getElementById(id);
 const CW = window.CW || {};
 export const TOKEN = CW.token || "";
 export const HOSTED = !!CW.hosted;
-export const SOURCE = CW.source || "/api/walkthrough";
+const localBase = HOSTED ? "" : location.pathname.replace(/\/$/, "");
+export const SOURCE = CW.source || localBase + "/api/walkthrough";
 export const SLUG = CW.slug || "";
 // The build stamp, so a renderer imported at runtime carries the same cache
 // key as the script that imported it.
 export const STAMP = CW.stamp || "";
 
 export async function api(path, init) {
+  if (!HOSTED && path.startsWith('/api/')) path = localBase + path;
   const opts = Object.assign({ headers: {} }, init || {});
   opts.headers = Object.assign({ "X-Cw-Token": TOKEN }, opts.headers);
   if (opts.body) opts.headers["Content-Type"] = "application/json";

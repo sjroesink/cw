@@ -1139,3 +1139,8 @@ mark.asked.lit { background: oklch(0.72 0.15 85 / 0.6); }
   .threads { grid-column: 1; }
   .threads-inner { padding: 20px 20px 40px; }
 }
+/* References are separate reading destinations. */
+.reference { border: 1px solid currentColor; border-radius: 8px; padding: 18px; }
+.reference h3 { margin-top: 8px; }
+.reference button { cursor: pointer; }
+.reference-return { margin-bottom: 20px; cursor: pointer; }
