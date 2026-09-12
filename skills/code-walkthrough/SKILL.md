@@ -70,11 +70,20 @@ when a walkthrough is requested, even a small topic can have a short walkthrough
    Publishing verifies against the tree again and fills snippet anchors. Publishing the
    same file updates its URL; `--new` deliberately creates a second walkthrough.
 
+   There are two sites. `cw.roesink.dev` is the default and is public. Innovadis code goes
+   to `cw.innovadis.roesink.dev` instead, with `--site` or by setting `CW_SITE` once for the
+   session. A walkthrough of a private repository published to the public site is what the
+   password lock exists for, but the internal site is the better answer.
+
 ## Running it
 
 Use `cw` on PATH, or an installed `cw.ps1` / `cw.sh` wrapper if available. Locate it in
 this environment rather than assuming a particular user's skill or repository path.
 From a checkout of cw, `go run .` can replace `cw`; Go is then required.
+
+The module is `github.com/innovadis-shared/cw`, which is internal, so the first install on a
+machine needs an account that can see it: `gh auth login`, then `gh auth setup-git`. The
+wrapper sets `GOPRIVATE` itself. An install that fails is almost always that.
 
 ```
 cw serve <walkthrough.json> [--root DIR] [--port N] [--no-open] [--offline]
@@ -126,9 +135,9 @@ On a later publish, leave the flags off and the lock stays exactly as it was, pa
 included. `--no-password` and `--no-allow` are how you take it off on purpose.
 
 Before writing an address list, check what the site makes of the address you mean:
-`curl https://cw.roesink.dev/api/v1/whoami`. Behind Cloudflare the address a rule sees is
-not always the one you expect, and a list that locks out the person who wrote it is the
-usual way this goes wrong.
+`curl https://cw.roesink.dev/api/v1/whoami`, or the same path on the site you are publishing
+to. Behind Cloudflare the address a rule sees is not always the one you expect, and a list
+that locks out the person who wrote it is the usual way this goes wrong.
 
 ## The two readers, and what each can do
 

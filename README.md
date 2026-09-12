@@ -30,8 +30,22 @@ Check that its embedded snippets still match with
 
 Go on PATH is the only requirement. The binary has no module dependencies.
 
+Development happens at `github.com/innovadis-shared/cw`, which is internal, so the module is fetched
+straight from GitHub rather than through the public proxy and git needs a credential that can see it:
+
 ```
-go install github.com/sjroesink/cw@latest
+gh auth login                                        once, with an account that can see the org
+gh auth setup-git                                    so git uses it too
+go env -w GOPRIVATE=github.com/innovadis-shared/*
+go install github.com/innovadis-shared/cw@latest
+```
+
+`github.com/sjroesink/cw` is a public mirror of the same code, and it is what runs cw.roesink.dev. It
+is a checkout rather than a module, because Go wants a module to be named after where it was fetched
+from and this one is named after the internal repository:
+
+```
+git clone https://github.com/sjroesink/cw && cd cw && go install .
 ```
 
 ```

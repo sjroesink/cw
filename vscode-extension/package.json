@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sjroesink/cw.git",
+    "url": "https://github.com/innovadis-shared/cw.git",
     "directory": "vscode-extension"
   },
   "engines": {

@@ -1,6 +1,6 @@
 ---
 name: open-walkthrough
-description: "Open a published code walkthrough on this machine, so the snippets are checked against your own checkout and every line number opens in your editor. Use when someone gives you a cw.roesink.dev link and wants it read locally: 'open https://cw.roesink.dev/w/fincent-pr-3347 lokaal', 'open deze walkthrough lokaal', 'lees dit lokaal in', 'open this walkthrough locally', '/open-walkthrough <url>'. Also for a walkthrough.json file on disk."
+description: "Open a published code walkthrough on this machine, so the snippets are checked against your own checkout and every line number opens in your editor. Use when someone gives you a cw.roesink.dev or cw.innovadis.roesink.dev link and wants it read locally: 'open https://cw.roesink.dev/w/fincent-pr-3347 lokaal', 'open deze walkthrough lokaal', 'lees dit lokaal in', 'open this walkthrough locally', '/open-walkthrough <url>'. Also for a walkthrough.json file on disk."
 ---
 
 # open-walkthrough

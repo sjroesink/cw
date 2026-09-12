@@ -1,4 +1,4 @@
-name: Publish cw to Unraid
+name: Publish cw
 
 on:
   push:
@@ -10,13 +10,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-cw-production
+  # Per repository, because the same file lives in both and a release of one
+  # has no business queueing behind a release of the other.
+  group: deploy-cw-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  test-and-deploy:
-    name: Test and publish cw.roesink.dev
-    if: github.repository == 'sjroesink/cw'
+  test:
+    name: Test the tagged revision
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -44,6 +45,17 @@ jobs:
           go build ./...
           docker build --pull --tag cw-release-test .
 
+  # Two deploys, one tag, and the if: is the whole of what keeps this file
+  # honest in both repositories. Neither job knows which one it is in beyond
+  # that line, and in each repository the other one shows as skipped.
+  deploy-unraid:
+    name: Publish cw.roesink.dev
+    needs: test
+    if: github.repository == 'sjroesink/cw'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
       - name: Trigger authenticated Unraid deployment
         shell: bash
         run: |
@@ -80,3 +92,94 @@ jobs:
           done
           echo 'Deploywebhook bleef twintig minuten onbereikbaar.' >&2
           exit 1
+
+  deploy-azure:
+    name: Publish cw.innovadis.roesink.dev
+    needs: test
+    if: github.repository == 'innovadis-shared/cw'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The federated credential trusts a subject naming this environment, because
+    # a tag name differs per release and Entra takes no wildcards.
+    environment: production
+
+    env:
+      RESOURCE_GROUP: Sander
+      REGISTRY: acrsandercw.azurecr.io
+      REGISTRY_NAME: acrsandercw
+      CONTAINER_APP: ca-sander-cw
+
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Work out the revision suffix
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "suffix=$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:].' '[:lower:]-')-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to Azure with the deploy identity
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to the registry
+        run: az acr login --name "${REGISTRY_NAME}"
+
+      - name: Build and push the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The assets stage runs cw cache warm, which fetches mermaid,
+          # highlight.js and the two typefaces, so this build needs egress.
+          docker build --pull \
+            --tag "${REGISTRY}/cw:${{ steps.tags.outputs.version }}" \
+            --tag "${REGISTRY}/cw:latest" .
+          docker push "${REGISTRY}/cw:${{ steps.tags.outputs.version }}"
+          docker push "${REGISTRY}/cw:latest"
+
+      - name: Roll the container app onto the new image
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp update \
+            --resource-group "${RESOURCE_GROUP}" \
+            --name "${CONTAINER_APP}" \
+            --image "${REGISTRY}/cw:${{ steps.tags.outputs.version }}" \
+            --revision-suffix "${{ steps.tags.outputs.suffix }}" \
+            --output none
+
+      - name: Wait for the new revision to take the traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          want="${CONTAINER_APP}--${{ steps.tags.outputs.suffix }}"
+          for attempt in $(seq 1 60); do
+            read -r health running traffic <<<"$(az containerapp revision show \
+              --resource-group "${RESOURCE_GROUP}" --name "${CONTAINER_APP}" --revision "$want" \
+              --query "[properties.healthState, properties.runningState, properties.trafficWeight]" \
+              -o tsv 2>/dev/null || echo 'none none none')"
+            echo "poging ${attempt}/60: ${health} ${running} ${traffic}%"
+            if [ "$health" = Healthy ] && [ "$traffic" = 100 ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'De nieuwe revisie werd niet gezond binnen tien minuten.' >&2
+          az containerapp revision show --resource-group "${RESOURCE_GROUP}" \
+            --name "${CONTAINER_APP}" --revision "$want" -o json >&2
+          exit 1
+
+      - name: Check the site answers
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Through Cloudflare like everybody else. The ingress only lets
+          # Cloudflare in, so the runner has no other way to reach it.
+          curl --fail --silent --show-error --retry 5 --retry-delay 10 \
+            https://cw.innovadis.roesink.dev/api/v1/whoami

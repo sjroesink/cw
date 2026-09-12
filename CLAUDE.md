@@ -17,12 +17,25 @@ by re-running `rebuild.py`, not by hand-editing the JSON.
 
 ## Pushing
 
-The remote is `sjroesink/cw`, and `gh` is usually signed in as the work account, which cannot push
-there:
+There are two remotes and they deploy to two sites. `origin` is `innovadis-shared/cw`, which is
+internal, is where the work happens, and is what the work account `gh` is usually signed in as can
+push to. Nothing special is needed:
 
 ```
-gh auth switch --user sjroesink && git push origin main && gh auth switch --user S-Roesink_innobv
+git push origin main --follow-tags
 ```
+
+`mirror` is `sjroesink/cw`, the public copy, and it is what deploys to cw.roesink.dev. Only the
+personal account can push there:
+
+```
+gh auth switch --user sjroesink && git push mirror main --follow-tags && gh auth switch --user S-Roesink_innobv
+```
+
+A `v*` tag on `origin` deploys to cw.innovadis.roesink.dev and the same tag on `mirror` deploys to
+cw.roesink.dev. `.github/workflows/deploy.yml` is the same file in both, and the `if:` on each deploy
+job is the whole of what keeps each repository deploying only to its own target. Nothing else in the
+repository is allowed to know which of the two it is sitting in.
 
 ## Things that are the way they are on purpose
 

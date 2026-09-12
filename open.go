@@ -259,9 +259,9 @@ func guessRoot(d *SourceView) string {
 		}
 	}
 
-	// A checkout is often not named after its repository: sjroesink/cw lives in
-	// CodeWalkthrough here. So the last resort is to look one level down the
-	// places checkouts live and ask each one what it is.
+	// A checkout is often not named after its repository: innovadis-shared/cw
+	// lives in CodeWalkthrough here. So the last resort is to look one level
+	// down the places checkouts live and ask each one what it is.
 	for _, parent := range []string{filepath.Dir(cwd), filepath.Join(home, "Projects"), "C:\\Projects"} {
 		entries, err := os.ReadDir(parent)
 		if err != nil {

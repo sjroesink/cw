@@ -65,6 +65,9 @@ WALKTHROUGH = {
     "source": {
         "kind": "subsystem",
         "provider": "github",
+        # The public mirror on purpose. This example is published on
+        # cw.roesink.dev, and source.repo is what builds every snippet's
+        # permalink, so it has to land somewhere a reader of that page can open.
         "repo": "sjroesink/cw",
         "number": "the cw binary",
         "url": "https://github.com/sjroesink/cw",

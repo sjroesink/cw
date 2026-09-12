@@ -270,7 +270,7 @@ function localBlock() {
 
   const hint = el("p", "local-hint");
   hint.appendChild(document.createTextNode("Needs cw on your machine: "));
-  hint.appendChild(el("code", "md", "go install github.com/sjroesink/cw@latest"));
+  hint.appendChild(el("code", "md", "git clone https://github.com/sjroesink/cw && cd cw && go install ."));
   if (state.data.meta && state.data.meta.locked) {
     hint.appendChild(document.createTextNode(
       ". This walkthrough is locked, so add --password if you had to type one to get in."));
