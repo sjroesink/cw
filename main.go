@@ -284,7 +284,7 @@ func cmdCheck(args []string) {
 	checked, moved, stale := tree.Verify(view)
 
 	fmt.Printf("%s\n", view.Title)
-	fmt.Printf("  format %s, parts %d, steps %d\n", view.Format, len(view.Tour()), view.Steps)
+	fmt.Printf("  format %s, parts %d, steps %d\n", view.Format, view.Parts, view.Steps)
 	if root == "" {
 		fmt.Printf("  root   none, so nothing was checked against a working tree\n")
 	} else {
@@ -292,8 +292,15 @@ func cmdCheck(args []string) {
 	}
 	fmt.Println()
 
-	for pi, p := range view.Tour() {
-		fmt.Printf("  [%d] %s\n", pi+1, p.Title)
+	for _, p := range view.Tour() {
+		if p.Number > 0 {
+			fmt.Printf("  [%d] %s\n", p.Number, p.Title)
+		} else {
+			fmt.Printf("  %s\n", p.Title)
+		}
+		for _, snip := range p.Snippets {
+			report("        ", snip.Name, snip.State, snip.Note)
+		}
 		for _, sec := range p.Sections {
 			fmt.Printf("      %s\n", sec.Title)
 			for _, snip := range sec.Snippets {

@@ -76,15 +76,15 @@
                   "snippet": {
                     "label": "The top-level document",
                     "language": "go",
-                    "text": "type Doc2 struct {\n\tSchema   string                     `json:\"$schema,omitempty\"`\n\tVersion  string                     `json:\"version\"`\n\tTitle    string                     `json:\"title\"`\n\tSummary  string                     `json:\"summary,omitempty\"`\n\tLanguage string                     `json:\"language,omitempty\"`\n\tSource   *Source2                   `json:\"source,omitempty\"`\n\tParts    []Part2                    `json:\"parts\"`\n\tExt      map[string]json.RawMessage `json:\"ext,omitempty\"`\n}\n",
+                    "text": "type Doc2 struct {\n\tSchema   string                     `json:\"$schema,omitempty\"`\n\tVersion  string                     `json:\"version\"`\n\tTitle    string                     `json:\"title\"`\n\tSummary  string                     `json:\"summary,omitempty\"`\n\tLanguage string                     `json:\"language,omitempty\"`\n\tSource   *Source2                   `json:\"source,omitempty\"`\n\tBlocks   []Block                    `json:\"blocks,omitempty\"`\n\tParts    []Part2                    `json:\"parts\"`\n\tExt      map[string]json.RawMessage `json:\"ext,omitempty\"`\n}\n",
                     "source": {
                       "file": "doc2.go",
                       "startLine": 40,
-                      "endLine": 49
+                      "endLine": 50
                     },
                     "hash": {
                       "algorithm": "sha256",
-                      "value": "bb919dd6e97527f29f80de3ab800e622bbec27e5c4a42b3be984960dd6b006d2"
+                      "value": "2b743595f10c4d9088d0c8c8d1f32b12f87343158f4ecad95e689b0cbfedf56e"
                     }
                   }
                 },
@@ -97,8 +97,8 @@
                     "text": "type Step2 struct {\n\tID     string                     `json:\"id\"`\n\tTitle  string                     `json:\"title\"`\n\tSpeech string                     `json:\"speech,omitempty\"`\n\tBlocks []Block                    `json:\"blocks\"`\n\tExt    map[string]json.RawMessage `json:\"ext,omitempty\"`\n}\n",
                     "source": {
                       "file": "doc2.go",
-                      "startLine": 97,
-                      "endLine": 103
+                      "startLine": 99,
+                      "endLine": 105
                     },
                     "hash": {
                       "algorithm": "sha256",
@@ -198,8 +198,8 @@
                     "text": "\troot := resolveRoot(f, res.View().RootHint)\n\n\tsub, err := fs.Sub(webFS, \"web\")\n\tif err != nil {\n\t\tdie(\"the web assets are missing from this build: %v\", err)\n\t}\n\tkey := commentKey(f.slug, abs)\n\ts := &server{file: abs, root: root, dev: f.dev, token: randomToken(),\n\t\tvendor: NewVendor(settings.Offline), web: sub,\n\t\tkey: key, title: res.View().Title, comments: openComments(key, res.View().Title)}\n",
                     "source": {
                       "file": "main.go",
-                      "startLine": 612,
-                      "endLine": 621
+                      "startLine": 619,
+                      "endLine": 628
                     },
                     "hash": {
                       "algorithm": "sha256",
@@ -223,15 +223,15 @@
                   "snippet": {
                     "label": "The cw/2 rendering loop",
                     "language": "javascript",
-                    "text": "  step(step, host) {\n    for (const [i, b] of (step.blocks || []).entries()) {\n      const node = blockNode(b, i);\n      if (!node) continue;\n      // The spacing belongs to being a block rather than to being a diagram or a\n      // diff, so it is set here and the builders only say what they are.\n      node.classList.add(\"block\");\n      if (b.id) node.dataset.block = b.id;\n",
+                    "text": "function into(list, host, key) {\n  for (const [i, b] of (list || []).entries()) {\n    const node = blockNode(b, key + i);\n    if (!node) continue;\n    // The spacing belongs to being a block rather than to being a diagram or a\n    // diff, so it is set here and the builders only say what they are.\n    node.classList.add(\"block\");\n    if (b.id) node.dataset.block = b.id;\n",
                     "source": {
                       "file": "web/render2.js",
-                      "startLine": 44,
-                      "endLine": 51
+                      "startLine": 53,
+                      "endLine": 60
                     },
                     "hash": {
                       "algorithm": "sha256",
-                      "value": "1bfcf12acdf81dde71356ade0b16753d813aae84a6aeb8eb2cf1ffb5854d5034"
+                      "value": "504c9aab5b187c882152bf47a59574f9e462e1a7b25e6d32759c999e510027b7"
                     }
                   }
                 }
@@ -255,8 +255,8 @@
                     "source": {
                       "file": "api.go",
                       "revision": "c7c69d9677e90cb87d1fec92636972a6fed8a6e7",
-                      "startLine": 409,
-                      "endLine": 414
+                      "startLine": 413,
+                      "endLine": 418
                     },
                     "hash": {
                       "algorithm": "sha256",

@@ -70,6 +70,7 @@ Three levels, and each one is a screen the reader lands on.
     "summary": "One line on the card.",
     "description": "The paragraph on the part page, where there is room for the why.",
     "files": ["verify-signature.ts", "webhook-keys.ts"],   // chips on the card
+    "blocks": [ /* optional, above the section rows */ ],
     "sections": [
       {
         "id": "hmac-middleware",
@@ -90,6 +91,16 @@ guidance, not a reason to pad a small topic or split a cohesive PR.
 a diagram links to a block by name, and nothing in a name says what kind of thing it points at. It
 is a name that survives editing, because progress, bookmarks and deep links hang off it. Once it
 exists, do not change it: changing an id loses every reader's place.
+
+**The overview and a part page can hold blocks too.** `"blocks"` beside `"parts"` at the top of the
+document is what the overview shows under its summary, and `"blocks"` in a part is what its page
+shows above the section rows. The same seven, checked the same way, snippets and all.
+
+Use one for the picture that only makes sense before the reader has been anywhere: the shape of the
+subsystem, the four services and the one that changed. A diagram there can link into a step, so the
+overview becomes a way in rather than a table of contents. What does not belong there is the content
+of a step: if it takes a paragraph and a snippet to explain, it is a step, and the overview is
+where somebody decides which part to read first.
 
 ## A step, and its blocks
 

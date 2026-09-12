@@ -184,11 +184,22 @@ function opens(node, fn) {
   return node;
 }
 
+/* What a page that is not a step has on it, when the format has that. cw/1 has
+   no such field and its renderer has no page(), so an old walkthrough draws
+   what it always drew. */
+function pageBlocks(v, list, key) {
+  if (!R.page || !list || !list.length) return;
+  const box = el("div", "pageblocks");
+  R.page(list, box, key);
+  v.appendChild(box);
+}
+
 function viewOverview() {
   const d = doc();
   const v = el("div", "view");
   v.appendChild(el("div", "eyebrow", "This walkthrough has " + plural(parts().length, "part")));
   if (d.summary) v.appendChild(asks(mdEl("p", "lede", d.summary), "summary"));
+  pageBlocks(v, d.blocks, "o");
 
   const grid = el("div", "cards");
   parts().forEach((p, pi) => {
@@ -298,6 +309,7 @@ function viewPart() {
   const intro = R.partIntro(p) || {};
   if (intro.long) head.appendChild(mdEl("p", "part-long", intro.long));
   v.appendChild(head);
+  pageBlocks(v, p.blocks, "p" + state.part + ".");
 
   const list = el("div", "sections");
   p.sections.forEach((s, si) => {

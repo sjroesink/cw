@@ -44,8 +44,10 @@ still served, still read and still published: see `FORMAT-v1.md`.
 ```
 walkthrough
   version, title, summary?, language?, source?, ext?
+  blocks[]?                   what the overview shows besides the parts
   parts[]                     one chapter, and one screen a reader lands on
     id, title, summary?, description?, files[]?, ext?
+    blocks[]?                 what the part page shows above its sections
     sections[]                a run of steps about a single idea
       id, title, summary?, ext?
       steps[]                 one screen, one idea
@@ -79,6 +81,14 @@ say, which is the whole reason this version exists.
 
 A type absent from the current schema is invalid for that schema. Readers may encounter a newer
 standard type and show an unsupported-block notice. Custom content uses `extension` and its fallback.
+
+Blocks are not only a step's. The walkthrough and each part may carry a list of their own, drawn on
+the screen a reader lands on rather than inside a step: the shape of the thing before anybody is
+sent into it. Same seven types, same rules, and both lists are optional, so a document without them
+is what every cw/2 document was until now. Two things follow. Ids are one namespace for the whole
+document, so a diagram on the overview may link to a block three steps in, and the other way round.
+And a snippet is a snippet wherever it sits: a consumer that checks snippets against a working tree
+checks these too, and one that lists the files a walkthrough touches lists theirs.
 
 ## Rendering: what is required of a consumer
 

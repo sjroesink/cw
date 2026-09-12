@@ -10,6 +10,21 @@
     "repositoryUrl": "https://github.com/sjroesink/cw",
     "label": "the format itself"
   },
+  "blocks": [
+    {
+      "type": "diagram",
+      "format": "mermaid",
+      "text": "flowchart LR\n  wt[walkthrough] --> parts\n  parts --> sections\n  sections --> steps\n  steps --> blocks\n  wt -.-> blocks",
+      "alt": "A walkthrough holds parts, which hold sections, which hold steps, which hold blocks. A dotted line runs straight from the walkthrough to blocks.",
+      "caption": "Three levels, and blocks at the end of them. The dotted line is this picture: the overview and the part pages hold blocks of their own.",
+      "links": [
+        {
+          "nodeId": "blocks",
+          "blockId": "shape-of-a-block"
+        }
+      ]
+    }
+  ],
   "parts": [
     {
       "id": "prose",
@@ -74,6 +89,13 @@
       "id": "code",
       "title": "Code",
       "summary": "Snippets with a place in a file, snippets without one, and the difference between them.",
+      "blocks": [
+        {
+          "type": "callout",
+          "severity": "tip",
+          "text": "Read locally, every snippet ahead is compared against the working tree on each load, and the chip on the panel says what it found. Read on the site there is no tree to compare against, so the chip says what the publisher's tree said."
+        }
+      ],
       "sections": [
         {
           "id": "snippets",

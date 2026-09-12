@@ -44,6 +44,7 @@ type Doc2 struct {
 	Summary  string                     `json:"summary,omitempty"`
 	Language string                     `json:"language,omitempty"`
 	Source   *Source2                   `json:"source,omitempty"`
+	Blocks   []Block                    `json:"blocks,omitempty"`
 	Parts    []Part2                    `json:"parts"`
 	Ext      map[string]json.RawMessage `json:"ext,omitempty"`
 }
@@ -82,6 +83,7 @@ type Part2 struct {
 	Summary     string                     `json:"summary,omitempty"`
 	Description string                     `json:"description,omitempty"`
 	Files       []string                   `json:"files,omitempty"`
+	Blocks      []Block                    `json:"blocks,omitempty"`
 	Sections    []Section2                 `json:"sections"`
 	Ext         map[string]json.RawMessage `json:"ext,omitempty"`
 }
