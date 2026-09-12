@@ -4,3 +4,8 @@ cw
 cw.exe
 /data
 *.published.json
+
+# The VS Code reader is a second front end with its own npm tree. The binary
+# does not embed it and never builds it, so it has no business in the context.
+vscode-extension
+node_modules

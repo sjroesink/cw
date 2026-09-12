@@ -1,0 +1,82 @@
+# The shape of the hosted site, next to the code that runs in it.
+#
+# Volumes cannot be expressed as flags, so the app is defined here and applied
+# with `az containerapp update -g Sander -n ca-sander-cw --yaml`. Only the image
+# moves on a deploy, and the workflow does that with --image rather than by
+# reapplying this file.
+#
+# The secret this references is set out of band, with `az containerapp secret
+# set`, and deliberately has no value here: a key that is the way back into a
+# walkthrough whose own key was lost does not belong in a repository.
+location: westeurope
+identity:
+  type: SystemAssigned
+properties:
+  managedEnvironmentId: /subscriptions/8235e3b9-4cd0-4426-879a-471503d9e4fc/resourceGroups/Sander/providers/Microsoft.App/managedEnvironments/cae-sander-cw
+  configuration:
+    activeRevisionsMode: Single
+    maxInactiveRevisions: 3
+    registries:
+      - server: acrsandercw.azurecr.io
+        identity: system
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: auto
+      allowInsecure: false
+      traffic:
+        - latestRevision: true
+          weight: 100
+  template:
+    terminationGracePeriodSeconds: 5
+    containers:
+      - name: cw
+        image: acrsandercw.azurecr.io/cw:bootstrap
+        resources:
+          cpu: 0.5
+          memory: 1.0Gi
+        env:
+          - name: CW_ADDR
+            value: ":8080"
+          - name: CW_DATA
+            value: "/data"
+          # Goes into every published URL and into /skill.md, and it is what
+          # decides whether the unlock cookie gets Secure. It has to be the name
+          # a reader types, not the one Azure generated.
+          - name: CW_BASE_URL
+            value: "https://cw.innovadis.roesink.dev"
+          # Deliberately trusting nothing until the ingress address is known.
+          # GET /api/v1/whoami reports the socket address whether or not it is
+          # trusted, which is how to find out what belongs here.
+          - name: CW_TRUSTED_PROXIES
+            value: "127.0.0.1"
+          - name: CW_BOOTSTRAP_KEY
+            secretRef: cw-bootstrap-key
+        probes:
+          - type: Readiness
+            httpGet: { path: /api/v1/whoami, port: 8080 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 6
+          - type: Liveness
+            httpGet: { path: /api/v1/whoami, port: 8080 }
+            periodSeconds: 30
+            failureThreshold: 3
+        volumeMounts:
+          - volumeName: cw-data
+            mountPath: /data
+    scale:
+      # Nothing runs when nobody is reading, which is most of the day. The first
+      # visitor after a quiet spell waits for a cold start. One replica at most,
+      # always: cw writes JSON with a temp file and a rename and hands out slugs
+      # by counting, and two of it on one share would race on both.
+      minReplicas: 0
+      maxReplicas: 1
+    volumes:
+      - name: cw-data
+        storageName: cwdata
+        storageType: AzureFile
+        # The default mount presents the share as root's with everything
+        # world-writable. store.go writes the site secret and the admin keys at
+        # 0600 and means it, so the mount says who the process is instead.
+        mountOptions: "uid=65532,gid=65532,file_mode=0600,dir_mode=0700,mfsymlinks,nobrl,nosharesock"
