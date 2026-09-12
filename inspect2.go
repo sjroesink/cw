@@ -19,7 +19,7 @@ func inspect2(res *LoadResult, d *Doc2) {
 	errf := func(f string, a ...any) { res.Errors = append(res.Errors, fmt.Sprintf(f, a...)) }
 	warnf := func(f string, a ...any) { res.Warnings = append(res.Warnings, fmt.Sprintf(f, a...)) }
 
-	if strings.TrimSpace(d.Summary) == "" {
+	if strings.TrimSpace(d.Summary) == "" && len(d.Blocks) == 0 {
 		warnf("summary is empty, so the overview opens on a row of cards and no argument")
 	}
 	if len(d.Parts) > 6 {
@@ -44,10 +44,28 @@ func inspect2(res *LoadResult, d *Doc2) {
 	blocks := map[string]*Block{}
 	steps, bare := 0, 0
 
+	// The overview and the part pages hold blocks of their own, and they are
+	// held to what a block is held to anywhere else. They are not steps: a
+	// picture of the whole change is not a step somebody has to walk through,
+	// so nothing here counts them or asks them to be more than prose.
+	page := func(list []Block, at string) {
+		for bi := range list {
+			b := &list[bi]
+			bat := fmt.Sprintf("%s.blocks[%d] (%s)", at, bi, b.Type)
+			claim(b.ID, bat)
+			if b.ID != "" {
+				blocks[b.ID] = b
+			}
+			checkBlock(errf, warnf, b, bat)
+		}
+	}
+	page(d.Blocks, "the walkthrough")
+
 	for pi := range d.Parts {
 		p := &d.Parts[pi]
 		pat := fmt.Sprintf("parts[%d] (%s)", pi, p.Title)
 		claim(p.ID, pat)
+		page(p.Blocks, pat)
 		if len(p.Sections) > 5 {
 			warnf("%s holds %d sections. Over about four, the part is two parts", pat, len(p.Sections))
 		}
@@ -326,8 +344,14 @@ func checkTimeline(errf func(string, ...any), b *Block, at string) {
 // walkBlocks visits every block in reading order, with the path an author can
 // find it by.
 func (d *Doc2) walkBlocks(fn func(at string, b *Block)) {
+	for bi := range d.Blocks {
+		fn(fmt.Sprintf("blocks[%d] (%s)", bi, d.Blocks[bi].Type), &d.Blocks[bi])
+	}
 	for pi := range d.Parts {
 		p := &d.Parts[pi]
+		for bi := range p.Blocks {
+			fn(fmt.Sprintf("parts[%d].blocks[%d] (%s)", pi, bi, p.Blocks[bi].Type), &p.Blocks[bi])
+		}
 		for si := range p.Sections {
 			s := &p.Sections[si]
 			for ii := range s.Steps {

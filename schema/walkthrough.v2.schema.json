@@ -28,6 +28,12 @@
     "source": {
       "$ref": "#/$defs/source"
     },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/block" },
+      "description": "What the overview shows besides the cards, in the same blocks a step is written in."
+    },
     "parts": {
       "type": "array",
       "minItems": 1,
@@ -735,6 +741,12 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/path" }
+        },
+        "blocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/block" },
+          "description": "What the part page shows above its sections."
         },
         "sections": {
           "type": "array",

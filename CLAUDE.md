@@ -94,6 +94,12 @@ else is an `extension`, which carries the fallback that makes a reader who does 
 able to read the walkthrough. `ext` is the other open place, for what one consumer needs and the
 format has no opinion about.
 
+That rule is about types, not about places. Blocks live in three of those now: a step, a part, and
+the walkthrough itself, which is what the overview draws under its summary. Everything that reads
+blocks goes through `walkBlocks`, so a snippet on the overview is checked, hashed and counted like
+any other, and the one thing that had to be said out loud is that the overview is a page and not
+part one: `Tour` numbers the parts and leaves it at zero.
+
 Which version a document is read as comes from `version` in the document and nothing else.
 `load.go` is that seam: it picks the schema, the struct and the checks, and the page picks its
 renderer the same way.

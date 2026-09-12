@@ -41,29 +41,37 @@ export default {
     return null;
   },
 
-  step(step, host) {
-    for (const [i, b] of (step.blocks || []).entries()) {
-      const node = blockNode(b, i);
-      if (!node) continue;
-      // The spacing belongs to being a block rather than to being a diagram or a
-      // diff, so it is set here and the builders only say what they are.
-      node.classList.add("block");
-      if (b.id) node.dataset.block = b.id;
-      // And what a comment hangs on. A block without an id is addressed by
-      // where it sits, which is enough for as long as the step is open.
-      node.dataset.anchor = b.id || "#" + i;
-      node.dataset.kind = anchorKind(b.type);
-      if (b.id && ui().focus === b.id) {
-        node.classList.add("focus");
-        // A diagram in the step before this one sent the reader here, so put
-        // the block it meant in front of them rather than at the top of a page
-        // they now have to search.
-        requestAnimationFrame(() => node.scrollIntoView({ block: "center", behavior: "smooth" }));
-      }
-      host.appendChild(node);
-    }
-  },
+  step(step, host) { into(step.blocks, host, ""); },
+
+  /* The overview and a part page hold blocks of their own: the shape of the
+     thing, drawn before anybody is sent into a step. They are the same seven,
+     so they are drawn by the same builders, and the key is prefixed because
+     the panel state they address is one bag for the whole document. */
+  page(list, host, key) { into(list, host, key); },
 };
+
+function into(list, host, key) {
+  for (const [i, b] of (list || []).entries()) {
+    const node = blockNode(b, key + i);
+    if (!node) continue;
+    // The spacing belongs to being a block rather than to being a diagram or a
+    // diff, so it is set here and the builders only say what they are.
+    node.classList.add("block");
+    if (b.id) node.dataset.block = b.id;
+    // And what a comment hangs on. A block without an id is addressed by where
+    // it sits, which is enough for as long as the page is open.
+    node.dataset.anchor = b.id || "#" + i;
+    node.dataset.kind = anchorKind(b.type);
+    if (b.id && ui().focus === b.id) {
+      node.classList.add("focus");
+      // A diagram somewhere else sent the reader here, so put the block it
+      // meant in front of them rather than at the top of a page they now have
+      // to search.
+      requestAnimationFrame(() => node.scrollIntoView({ block: "center", behavior: "smooth" }));
+    }
+    host.appendChild(node);
+  }
+}
 
 /* The blocks of something that is not a step. A comment's answer is written
    in the same seven, so it is drawn by the same builders rather than by a
@@ -265,12 +273,27 @@ function calloutBlock(b) {
 
 // Every block in the document that has an id, and where it lives, so a diagram
 // can send a reader to a snippet three steps away.
+/* Which screen every block with an id is on. A diagram link names a block and
+   the reader should not have to know where it lives, and since the overview and
+   the part pages hold blocks too, "where" is a screen rather than three
+   numbers. */
 function blockIndex() {
   const found = new Map();
-  parts().forEach((p, pi) => p.sections.forEach((s, si) => s.steps.forEach((st, ii) => {
-    (st.blocks || []).forEach((b) => { if (b.id) found.set(b.id, { p: pi, s: si, i: ii, type: b.type }); });
-  })));
+  const put = (list, where) => (list || []).forEach((b) => { if (b.id) found.set(b.id, where); });
+  put(doc().blocks, { view: "overview", part: null, section: null });
+  parts().forEach((p, pi) => {
+    put(p.blocks, { view: "part", part: pi, section: null });
+    p.sections.forEach((s, si) => s.steps.forEach((st, ii) => {
+      put(st.blocks, { view: "step", part: pi, section: si, step: ii });
+    }));
+  });
   return found;
+}
+
+// Whether that screen is the one being read.
+function onScreen(w) {
+  return w.view === state.view && w.part === state.part &&
+    (w.view !== "step" || (w.section === state.section && w.step === state.step));
 }
 
 function diagramBlock(b, at) {
@@ -325,13 +348,13 @@ function wireLinks(host, b) {
     node.setAttribute("title", "show " + blockId);
     node.addEventListener("click", (e) => {
       e.stopPropagation();
-      // The block may be in this step or three steps away, and the reader
+      // The block may be on this page or three steps away, and the reader
       // should not have to know which.
-      if (where.p === state.part && where.s === state.section && where.i === state.step) {
+      if (onScreen(where)) {
         setUI({ focus: ui().focus === blockId ? null : blockId });
         return;
       }
-      go({ view: "step", part: where.p, section: where.s, step: where.i, ui: { focus: blockId } });
+      go(Object.assign({ step: 0, ui: { focus: blockId } }, where));
     });
   };
 

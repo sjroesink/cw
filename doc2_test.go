@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -153,6 +154,61 @@ func TestIdsAreUniqueAcrossTheWholeDocument(t *testing.T) {
 	  {"id":"thing","title":"P","sections":[{"id":"s","title":"S","steps":[
 	    {"id":"thing","title":"St","blocks":[{"type":"markdown","text":"x"}]}]}]}]}`
 	wantErr(t, doc, `the id "thing" is already used by parts[0] (P)`, "one namespace for the whole document")
+}
+
+// The overview and the part pages hold blocks of their own. A block there is a
+// block: the same schema, the same checks on what is inside it, and the same one
+// namespace for the whole document.
+func TestABlockOnAPageIsHeldToWhatABlockIsHeldTo(t *testing.T) {
+	step := `"sections":[{"id":"s","title":"S","steps":[{"id":"st","title":"St","blocks":[` +
+		`{"type":"markdown","id":"words","text":"x"}]}]}]`
+	overview := `{"version":"cw/2","title":"T","blocks":[%s],"parts":[{"id":"p","title":"P",` + step + `}]}`
+	part := `{"version":"cw/2","title":"T","parts":[{"id":"p","title":"P","blocks":[%s],` + step + `}]}`
+
+	// What is inside it is checked, and the path says which page it is on.
+	badSnippet := `{"type":"code","snippet":{"text":"a\nb","source":{"file":"a.go","startLine":10,"endLine":14}}}`
+	wantErr(t, fmt.Sprintf(overview, badSnippet),
+		"the walkthrough.blocks[0]", "lines 10 to 14 is 5 lines and the text has 2")
+	wantErr(t, fmt.Sprintf(part, badSnippet), "parts[0] (P).blocks[0]")
+
+	// And its id is claimed out of the one namespace the document has.
+	wantErr(t, fmt.Sprintf(overview, `{"type":"markdown","id":"words","text":"y"}`),
+		`the id "words" is already used`, "one namespace for the whole document")
+	wantNoErr(t, fmt.Sprintf(overview, `{"type":"markdown","id":"other","text":"y"}`))
+	wantNoErr(t, fmt.Sprintf(part, `{"type":"callout","severity":"tip","text":"y"}`))
+}
+
+// A snippet on one of those pages is a snippet: it is checked against the
+// working tree, it is in the file list, and cw check has a line to print it on.
+// The overview is not part one, so it is a page with no number.
+func TestASnippetOnAPageIsCheckedLikeAnyOther(t *testing.T) {
+	view := read2(t, `{"version":"cw/2","title":"T",
+	  "blocks":[{"type":"code","snippet":{"text":"a\n","source":{"file":"over.go","startLine":1}}}],
+	  "parts":[{"id":"p","title":"P",
+	    "blocks":[{"type":"code","snippet":{"text":"b\n","source":{"file":"part.go","startLine":1}}}],
+	    "sections":[{"id":"s","title":"S","steps":[{"id":"st","title":"St","blocks":[
+	      {"type":"code","snippet":{"text":"c\n","source":{"file":"step.go","startLine":1}}}]}]}]}]}`).View()
+
+	if len(view.Snippets) != 3 {
+		t.Errorf("%d snippets are checked against the tree, want 3", len(view.Snippets))
+	}
+	if want := []string{"over.go", "part.go", "step.go"}; !reflect.DeepEqual(view.Files, want) {
+		t.Errorf("the file list is %v, want %v", view.Files, want)
+	}
+	if view.Parts != 1 {
+		t.Errorf("the walkthrough says it has %d parts, and the overview is not one of them", view.Parts)
+	}
+
+	tour := view.Tour()
+	if len(tour) != 2 {
+		t.Fatalf("cw check would print %d pages, want the overview and one part", len(tour))
+	}
+	if tour[0].Number != 0 || tour[0].Title != "the overview" || len(tour[0].Snippets) != 1 {
+		t.Errorf("the overview came back as %+v", tour[0])
+	}
+	if tour[1].Number != 1 || len(tour[1].Snippets) != 1 || len(tour[1].Sections) != 1 {
+		t.Errorf("the part came back as %+v", tour[1])
+	}
 }
 
 func TestADiagramCanOnlyLinkToCodeThatExists(t *testing.T) {

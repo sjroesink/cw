@@ -174,7 +174,7 @@ WALKTHROUGH = {
                                 "has to be this loopback server, and the caller has to know the token that was "
                                 "stamped into the page when it was served. Only then does anything get read."
                             ),
-                            "code": code("main.go", 808, 820, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[810, 814]),
+                            "code": code("main.go", 815, 827, "func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {", hi=[817, 821]),
                         },
                         {
                             "title": "A path is checked, not cleaned",

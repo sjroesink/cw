@@ -272,20 +272,24 @@ func verdictOf(view *Walkthrough, at time.Time) *Verified {
 	if view.Source != nil {
 		v.Commit = view.Source.Commit
 	}
-	for _, p := range view.Tour() {
-		for _, sec := range p.Sections {
-			for _, snip := range sec.Snippets {
-				switch snip.State {
-				case "", "unchecked":
-					continue
-				case "ok", "match":
-				case "moved":
-					v.Moved++
-				default:
-					v.Stale++
-				}
-				v.Checked++
+	count := func(snips []TourSnippet) {
+		for _, snip := range snips {
+			switch snip.State {
+			case "", "unchecked":
+				continue
+			case "ok", "match":
+			case "moved":
+				v.Moved++
+			default:
+				v.Stale++
 			}
+			v.Checked++
+		}
+	}
+	for _, p := range view.Tour() {
+		count(p.Snippets)
+		for _, sec := range p.Sections {
+			count(sec.Snippets)
 		}
 	}
 	if v.Checked == 0 && v.Commit == "" {

@@ -286,6 +286,10 @@ body.locked { overflow: hidden; }
   max-width: 62ch; font-size: 17px; line-height: 1.8; color: var(--ink-2);
   text-wrap: pretty; margin-bottom: 36px;
 }
+/* The blocks an overview or a part page carries, between what it says and the
+   cards that lead out of it. */
+.pageblocks { margin-bottom: 36px; }
+
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;

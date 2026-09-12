@@ -160,6 +160,7 @@ type Walkthrough struct {
 	Summary  string
 	RootHint string
 	Source   *SourceView
+	Parts    int
 	Steps    int
 	Files    []string
 	Snippets []SnippetRef
@@ -199,7 +200,7 @@ func (w *Walkthrough) Raw() ([]byte, error) {
 func viewOf1(d *Doc) *Walkthrough {
 	w := &Walkthrough{
 		Format: FormatV1, Title: d.Title, Summary: d.Summary, RootHint: d.Root,
-		Steps: d.Steps(), Files: d.Files(), V1: d,
+		Parts: len(d.Parts), Steps: d.Steps(), Files: d.Files(), V1: d,
 	}
 	if s := d.Source; s != nil {
 		w.Source = &SourceView{
@@ -236,7 +237,7 @@ func viewOf1(d *Doc) *Walkthrough {
 func viewOf2(d *Doc2) *Walkthrough {
 	w := &Walkthrough{
 		Format: FormatV2, Title: d.Title, Summary: d.Summary,
-		Steps: d.Steps(), Files: d.Files(), Source: sourceViewOf2(d.Source), V2: d,
+		Parts: len(d.Parts), Steps: d.Steps(), Files: d.Files(), Source: sourceViewOf2(d.Source), V2: d,
 	}
 	// cw/2 has no root: which checkout the paths hang off is a fact about the
 	// machine reading it, not about the document, so it stays with the reader.
@@ -398,7 +399,11 @@ both versions can answer it, so it is here instead of twice in the command.
 */
 
 type TourPart struct {
-	Title    string
+	Title string
+	// Which part this is, and zero for a page that is not one: the overview
+	// carries snippets of its own now, and it is not part one.
+	Number   int
+	Snippets []TourSnippet
 	Sections []TourSection
 }
 
@@ -430,8 +435,8 @@ func (w *Walkthrough) Tour() []TourPart {
 
 func tourOf1(d *Doc) []TourPart {
 	out := make([]TourPart, 0, len(d.Parts))
-	for _, p := range d.Parts {
-		tp := TourPart{Title: p.Title}
+	for pi, p := range d.Parts {
+		tp := TourPart{Title: p.Title, Number: pi + 1}
 		for _, s := range p.Sections {
 			ts := TourSection{Title: s.Title}
 			for _, st := range s.Steps {
@@ -460,27 +465,38 @@ func snippetOf1(name string, c *Check) TourSnippet {
 }
 
 func tourOf2(d *Doc2) []TourPart {
-	out := make([]TourPart, 0, len(d.Parts))
-	for _, p := range d.Parts {
-		tp := TourPart{Title: p.Title}
+	out := make([]TourPart, 0, len(d.Parts)+1)
+	// The overview only appears when it has something to say about the tree,
+	// so a walkthrough that never used the field reads exactly as it did.
+	if snips := tourSnippets2(d.Blocks); len(snips) > 0 {
+		out = append(out, TourPart{Title: "the overview", Snippets: snips})
+	}
+	for pi, p := range d.Parts {
+		tp := TourPart{Title: p.Title, Number: pi + 1, Snippets: tourSnippets2(p.Blocks)}
 		for _, s := range p.Sections {
 			ts := TourSection{Title: s.Title}
 			for _, st := range s.Steps {
-				for bi := range st.Blocks {
-					b := &st.Blocks[bi]
-					if b.Type != BlockCode || b.Snippet == nil || b.Snippet.Source == nil {
-						continue
-					}
-					snip := TourSnippet{Name: b.Snippet.Source.File}
-					if v := b.Snippet.Verification; v != nil {
-						snip.State, snip.Note = v.State, v.Note
-					}
-					ts.Snippets = append(ts.Snippets, snip)
-				}
+				ts.Snippets = append(ts.Snippets, tourSnippets2(st.Blocks)...)
 			}
 			tp.Sections = append(tp.Sections, ts)
 		}
 		out = append(out, tp)
+	}
+	return out
+}
+
+func tourSnippets2(list []Block) []TourSnippet {
+	var out []TourSnippet
+	for bi := range list {
+		b := &list[bi]
+		if b.Type != BlockCode || b.Snippet == nil || b.Snippet.Source == nil {
+			continue
+		}
+		snip := TourSnippet{Name: b.Snippet.Source.File}
+		if v := b.Snippet.Verification; v != nil {
+			snip.State, snip.Note = v.State, v.Note
+		}
+		out = append(out, snip)
 	}
 	return out
 }
